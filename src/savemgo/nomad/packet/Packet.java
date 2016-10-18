@@ -33,6 +33,13 @@ public class Packet {
 		setCommand(command);
 	}
 	
+	public Packet(int command, int error) {
+		this.header = PooledByteBufAllocator.DEFAULT.directBuffer(24);
+		this.payload = PooledByteBufAllocator.DEFAULT.directBuffer(4);
+		setCommand(command);
+		this.payload.writeInt(error);
+	}
+	
 	public Packet(int command, ByteBuf payload) {
 		this.header = PooledByteBufAllocator.DEFAULT.directBuffer(24);
 		this.payload = payload;

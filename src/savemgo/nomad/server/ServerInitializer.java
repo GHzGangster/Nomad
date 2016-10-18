@@ -14,10 +14,10 @@ public class ServerInitializer extends ChannelInitializer<SocketChannel> {
 	private static final PacketEncoder HANDLER_ENCODER = new PacketEncoder();
 	private static final PacketDecoder HANDLER_DECODER = new PacketDecoder();
 
-	private final PacketHandler server;
+	private final Lobby server;
 	private final EventExecutorGroup eventExecutor;
 
-	public ServerInitializer(PacketHandler server) {
+	public ServerInitializer(Lobby server) {
 		this.server = server;
 
 		eventExecutor = new DefaultEventExecutorGroup(16);
