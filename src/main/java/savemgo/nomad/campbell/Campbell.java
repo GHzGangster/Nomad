@@ -3,14 +3,18 @@ package savemgo.nomad.campbell;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import com.google.common.collect.ImmutableMap;
@@ -61,17 +65,19 @@ public class Campbell {
 			}
 
 			String json = gson.toJson(data);
-			StringEntity entity = null;
+
+			ArrayList<NameValuePair> params = new ArrayList<NameValuePair>();
+			params.add(new BasicNameValuePair("msg", json));
+
+			HttpEntity entity = null;
 			try {
-				entity = new StringEntity(json);
+				entity = new UrlEncodedFormEntity(params);
 			} catch (UnsupportedEncodingException e) {
 				e.printStackTrace();
 				return ImmutableMap.of("result", "ERR_RESPONSE_ENCODE");
 			}
 
 			post.setEntity(entity);
-			post.setHeader("Accept", "application/json");
-			post.setHeader("Content-type", "application/json");
 
 			String responseBody = "";
 			try {
