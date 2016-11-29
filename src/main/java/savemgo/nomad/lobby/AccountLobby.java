@@ -5,17 +5,16 @@ import org.apache.logging.log4j.Logger;
 
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.helper.Lobbies;
-import savemgo.nomad.helper.News;
+import savemgo.nomad.helper.Accounts;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.server.Lobby;
 
 @Sharable
-public class GateLobby extends Lobby {
+public class AccountLobby extends Lobby {
 
-	private static final Logger logger = LogManager.getLogger(GateLobby.class.getSimpleName());
+	private static final Logger logger = LogManager.getLogger(AccountLobby.class.getSimpleName());
 
-	public GateLobby(int id) {
+	public AccountLobby(int id) {
 		super(id);
 	}
 
@@ -34,14 +33,35 @@ public class GateLobby extends Lobby {
 			ctx.write(new Packet(0x0005));
 			break;
 
-		/** Main Lobby */
-		case 0x2005:
-			Lobbies.getLobbyList(ctx);
+		/** Account */
+		case 0x3003:
+			Accounts.checkSession(ctx, in);
 			break;
 
-		case 0x2008:
-			News.getNews(ctx);
+		case 0x3042:
+			logger.debug("Got 0x3042.");
+			ctx.write(new Packet(0x3041));
 			break;
+
+		case 0x3048:
+			Accounts.getCharacterList(ctx);
+			break;
+
+		case 0x3101:
+			Accounts.createCharacter(ctx, in);
+			break;
+
+		case 0x3103:
+			Accounts.selectCharacter(ctx, in);
+			break;
+
+		case 0x3105:
+			Accounts.deleteCharacter(ctx, in);
+			break;
+
+		// case 0x3107:
+		// Accounts.checkCharacterName(ctx, in);
+		// break;
 
 		default:
 			logger.error("Couldn't handle command " + Integer.toHexString(in.getCommand()));

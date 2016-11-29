@@ -14,23 +14,21 @@ public class ServerInitializer extends ChannelInitializer<SocketChannel> {
 	private static final PacketEncoder HANDLER_ENCODER = new PacketEncoder();
 	private static final PacketDecoder HANDLER_DECODER = new PacketDecoder();
 
-	private final Lobby server;
+	private final Lobby lobby;
 	private final EventExecutorGroup eventExecutor;
 
-	public ServerInitializer(Lobby server) {
-		this.server = server;
-
-		eventExecutor = new DefaultEventExecutorGroup(16);
+	public ServerInitializer(Lobby lobby, int executorThreads) {
+		this.lobby = lobby;
+		eventExecutor = new DefaultEventExecutorGroup(executorThreads);
 	}
 
 	@Override
 	public void initChannel(SocketChannel ch) throws Exception {
 		ChannelPipeline pipeline = ch.pipeline();
-
 		pipeline.addLast("timeout", new ReadTimeoutHandler(300));
 		pipeline.addLast("packetEncoder", HANDLER_ENCODER);
 		pipeline.addLast("packetDecoder", HANDLER_DECODER);
-		pipeline.addLast(eventExecutor, "serverHandler", server);
+		pipeline.addLast(eventExecutor, "packetHandler", lobby);
 	}
 
 }

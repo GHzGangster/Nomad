@@ -22,7 +22,13 @@ public class Util {
 		return new byte[] { (byte) (value >> 24), (byte) (value >> 16), (byte) (value >> 8), (byte) value };
 	}
 
-	public static void xorBuffer(ByteBuf buffer, int length, int key) {
+	public static void xor(byte[] bytes, byte[] key) {
+		for (int i = 0; i < bytes.length; i++) {
+			bytes[i] ^= key[i];
+		}
+	}
+	
+	public static void xor(ByteBuf buffer, int length, int key) {
 		long keyLong = key & 0xffffffffL;
 		keyLong |= (keyLong << 32);
 

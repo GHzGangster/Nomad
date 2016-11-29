@@ -1,8 +1,5 @@
 package savemgo.nomad.packet;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.PooledByteBufAllocator;
-
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -10,9 +7,18 @@ import java.util.Arrays;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import savemgo.nomad.Util;
 
 public class Packet {
+
+	private static final Logger logger = LogManager.getLogger(Packet.class.getSimpleName());
+
+	private static final int ERROR_MASK = 0xDAB055 << 8;
 
 	public static final int OFFSET_COMMAND = 0x0;
 	public static final int OFFSET_PAYLOAD_LENGTH = 0x2;
@@ -32,14 +38,21 @@ public class Packet {
 		this.payload = null;
 		setCommand(command);
 	}
-	
+
 	public Packet(int command, int error) {
+		this(command, error, false);
+	}
+	
+	public Packet(int command, int error, boolean dontMask) {
 		this.header = PooledByteBufAllocator.DEFAULT.directBuffer(24);
 		this.payload = PooledByteBufAllocator.DEFAULT.directBuffer(4);
 		setCommand(command);
+		if (!dontMask) {
+			error |= ERROR_MASK;
+		}
 		this.payload.writeInt(error);
 	}
-	
+
 	public Packet(int command, ByteBuf payload) {
 		this.header = PooledByteBufAllocator.DEFAULT.directBuffer(24);
 		this.payload = payload;
@@ -143,7 +156,7 @@ public class Packet {
 
 			result = mac.doFinal(bytes);
 		} catch (NoSuchAlgorithmException | InvalidKeyException e) {
-			e.printStackTrace();
+			logger.error("Failed to calculte checksum.", e);
 		}
 		return result;
 	}
@@ -154,14 +167,14 @@ public class Packet {
 		} else {
 			setPayloadLength(payload.capacity());
 		}
-		
+
 		byte[] checksum = calculateChecksum();
 		try {
 			header.setBytes(OFFSET_CHECKSUM, checksum, 0, checksum.length);
 		} catch (IndexOutOfBoundsException e) {
 			//
 		}
-		
+
 		header.setIndex(0, header.capacity());
 		if (payload != null) {
 			payload.setIndex(0, payload.capacity());

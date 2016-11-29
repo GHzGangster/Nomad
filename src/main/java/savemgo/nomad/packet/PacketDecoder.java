@@ -1,5 +1,8 @@
 package savemgo.nomad.packet;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandler.Sharable;
@@ -10,6 +13,8 @@ import savemgo.nomad.Util;
 @Sharable
 public class PacketDecoder extends ChannelInboundHandlerAdapter {
 
+	private static final Logger logger = LogManager.getLogger(PacketDecoder.class.getSimpleName());
+
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) {
 		ByteBuf buffer = null, packetBuffer = null;
@@ -19,12 +24,12 @@ public class PacketDecoder extends ChannelInboundHandlerAdapter {
 			int readable = buffer.readableBytes();
 
 			if (readable == 0) {
-				System.out.println("No bytes to read in.");
+				logger.debug("No bytes to read in.");
 				return;
 			}
 
 			if (readable < Packet.OFFSET_PAYLOAD) {
-				System.out.println("Packet is too short, waiting for header...");
+				logger.debug("Packet is too short, waiting for header...");
 				return;
 			}
 
@@ -32,21 +37,21 @@ public class PacketDecoder extends ChannelInboundHandlerAdapter {
 			lengthPayload ^= Util.KEY_XOR & 0xffff;
 
 			if (lengthPayload < 0 || Packet.MAX_PAYLOAD_LENGTH < lengthPayload) {
-				System.out.println("Payload isn't a valid length.");
+				logger.debug("Payload isn't a valid length.");
 				return;
 			}
 
 			int bytesToRead = Packet.OFFSET_PAYLOAD + lengthPayload;
 
 			if (readable < bytesToRead) {
-				System.out.println("Packet is too short, waiting for payload...");
+				logger.debug("Packet is too short, waiting for payload...");
 				return;
 			}
 
 			packetBuffer = ctx.alloc().directBuffer(bytesToRead);
 			packetBuffer.writeBytes(buffer, bytesToRead);
 
-			Util.xorBuffer(packetBuffer, packetBuffer.readableBytes(), Util.KEY_XOR);
+			Util.xor(packetBuffer, packetBuffer.readableBytes(), Util.KEY_XOR);
 
 			ByteBuf header = packetBuffer.copy(Packet.OFFSET_COMMAND, Packet.OFFSET_PAYLOAD);
 			ByteBuf payload = packetBuffer.copy(Packet.OFFSET_PAYLOAD, lengthPayload);
@@ -54,25 +59,29 @@ public class PacketDecoder extends ChannelInboundHandlerAdapter {
 			Packet packet = new Packet(header, payload);
 
 			if (!packet.validate()) {
-				System.out.println("Packet is invalid.");
+				logger.warn("Packet is invalid.");
 				return;
 			}
 
-			System.out.println("In - Command " + Integer.toHexString(packet.getCommand()) + " - "
-					+ packet.getPayloadLength() + " bytes");
+			logger.debug("In - Command " + Integer.toHexString(packet.getCommand()) + " - " + packet.getPayloadLength()
+					+ " bytes");
 			if (packet.getPayloadLength() > 0) {
-				System.out.println("# " + ByteBufUtil.hexDump(packet.getPayload()));
+				logger.debug("# {}", () -> ByteBufUtil.hexDump(packet.getPayload()));
 			}
 
-			System.out.println(ByteBufUtil.hexDump(packetBuffer));
-			
+			final ByteBuf packetBufferFinal = packetBuffer;
+			logger.debug(() -> ByteBufUtil.hexDump(packetBufferFinal));
+
 			ctx.fireChannelRead(packet);
 		} catch (Exception e) {
-			System.err.println("Failed to decode packet.");
-			e.printStackTrace();
+			logger.error("Failed to decode packet.", e);
 		} finally {
-			buffer.release();
-			packetBuffer.release();
+			if (buffer != null) {
+				buffer.release();
+			}
+			if (packetBuffer != null) {
+				packetBuffer.release();
+			}
 		}
 	}
 

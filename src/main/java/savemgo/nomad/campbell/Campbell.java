@@ -16,6 +16,8 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
@@ -23,6 +25,8 @@ import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 
 public class Campbell {
+
+	private static final Logger logger = LogManager.getLogger(Campbell.class.getSimpleName());
 
 	private static final Type TYPE_HASHMAP = new TypeToken<Map<String, Object>>() {
 	}.getType();
@@ -49,7 +53,7 @@ public class Campbell {
 		return getResponse(page, command, new HashMap<>());
 	}
 
-	public Map<String, Object> getResponse(String page, String command, Map<String, String> data) {
+	public Map<String, Object> getResponse(String page, String command, Map<String, Object> data) {
 		CloseableHttpClient client = HttpClients.createDefault();
 		try {
 			if (baseUrl.isEmpty()) {
@@ -61,11 +65,13 @@ public class Campbell {
 			data.put("command", command);
 
 			if (!apiKey.isEmpty()) {
-				data.put("key", apiKey);
+				data.put("apikey", apiKey);
 			}
 
 			String json = gson.toJson(data);
 
+			logger.debug(json);
+			
 			ArrayList<NameValuePair> params = new ArrayList<NameValuePair>();
 			params.add(new BasicNameValuePair("msg", json));
 
@@ -73,7 +79,7 @@ public class Campbell {
 			try {
 				entity = new UrlEncodedFormEntity(params);
 			} catch (UnsupportedEncodingException e) {
-				e.printStackTrace();
+				logger.error("Failed to encode data.", e);
 				return ImmutableMap.of("result", "ERR_RESPONSE_ENCODE");
 			}
 
@@ -84,16 +90,16 @@ public class Campbell {
 				CloseableHttpResponse response = client.execute(post);
 				responseBody = EntityUtils.toString(response.getEntity());
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.error("Failed to execute post.", e);
 				return ImmutableMap.of("result", "ERR_RESPONSE_EMPTY");
 			}
 
-			System.out.println(responseBody);
+			logger.debug(responseBody);
 
 			try {
 				return gson.fromJson(responseBody, TYPE_HASHMAP);
 			} catch (JsonParseException e) {
-				e.printStackTrace();
+				logger.error("Failed to parse response.", e);
 				return ImmutableMap.of("result", "ERR_RESPONSE_PARSE");
 			}
 		} finally {

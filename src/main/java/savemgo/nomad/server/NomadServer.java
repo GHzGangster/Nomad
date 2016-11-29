@@ -15,6 +15,11 @@ public class NomadServer {
 	private ChannelFuture future;
 
 	public NomadServer(Lobby lobby, String ip, int port, EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
+		this(lobby, ip, port, bossGroup, workerGroup, 16);
+	}
+
+	public NomadServer(Lobby lobby, String ip, int port, EventLoopGroup bossGroup, EventLoopGroup workerGroup,
+			int executorThreads) {
 		sb = new ServerBootstrap();
 		sb.group(bossGroup, workerGroup);
 		sb.channel(NioServerSocketChannel.class);
@@ -23,7 +28,7 @@ public class NomadServer {
 				.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024));
 		sb.childOption(ChannelOption.SO_KEEPALIVE, true).childOption(ChannelOption.WRITE_BUFFER_WATER_MARK,
 				new WriteBufferWaterMark(8 * 1024, 32 * 1024));
-		sb.childHandler(new ServerInitializer(lobby));
+		sb.childHandler(new ServerInitializer(lobby, executorThreads));
 		sb.localAddress(ip, port);
 	}
 
