@@ -2,6 +2,7 @@ package savemgo.nomad.entity;
 
 import java.util.List;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
@@ -42,7 +43,7 @@ public class Character {
 
 	private Integer lobby = 0;
 
-	@OneToMany(fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterAppearance> appearances;
 
 	// OneToOne isn't working lazily, use OneToMany for now

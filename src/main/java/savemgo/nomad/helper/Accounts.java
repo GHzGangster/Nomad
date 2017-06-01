@@ -2,6 +2,7 @@ package savemgo.nomad.helper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.persistence.criteria.CriteriaBuilder;
@@ -113,15 +114,15 @@ public class Accounts {
 			session.beginTransaction();
 
 			Query<Character> query = session.createQuery(
-					"FROM Character as c INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
+					"from Character as c inner join fetch c.appearances where user=:user", Character.class);
 			query.setParameter("user", user.getId());
 			List<Character> characters = query.list();
-			
+
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
 			int numCharacters = characters.size();
-			
+
 			bo = ctx.alloc().directBuffer(0x1d7);
 			bo.writeInt(0).writeByte(user.getSlots()).writeByte(numCharacters).writeZero(1);
 
@@ -169,7 +170,15 @@ public class Accounts {
 
 	public static void createCharacter(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting character list: No User.");
+				Packets.writeError(ctx, 0x3102, 2);
+				return;
+			}
+			
 			ByteBuf bi = in.getPayload();
 
 			String name = Util.readString(bi, 16);
@@ -201,91 +210,113 @@ public class Accounts {
 			int accessory1Color = bi.readByte();
 			int accessory2Color = bi.readByte();
 
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-			data.addProperty("name", name);
-			data.addProperty("gender", gender);
-			data.addProperty("face", face);
-			data.addProperty("voice", voice);
-			data.addProperty("pitch", pitch);
-			data.addProperty("head", head);
-			data.addProperty("headColor", headColor);
-			data.addProperty("upper", upper);
-			data.addProperty("upperColor", upperColor);
-			data.addProperty("lower", lower);
-			data.addProperty("lowerColor", lowerColor);
-			data.addProperty("chest", chest);
-			data.addProperty("chestColor", chestColor);
-			data.addProperty("waist", waist);
-			data.addProperty("waistColor", waistColor);
-			data.addProperty("hands", hands);
-			data.addProperty("handsColor", handsColor);
-			data.addProperty("feet", feet);
-			data.addProperty("feetColor", feetColor);
-			data.addProperty("accessory1", accessory1);
-			data.addProperty("accessory1Color", accessory1Color);
-			data.addProperty("accessory2", accessory2);
-			data.addProperty("accessory2Color", accessory2Color);
-			data.addProperty("facePaint", facePaint);
-
-			JsonObject response = Campbell.instance().getResponse("accounts", "createCharacter", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while creating character: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x3102, 2);
-				return;
-			}
-
-			int charId = response.get("chara").getAsInt();
-
+			Character character = new Character();
+			character.setName(name);
+			character.setUser(user.getId());
+			
+			CharacterAppearance appearance = new CharacterAppearance();
+			character.setAppearances(Arrays.asList(appearance));
+			appearance.setCharacter(character);
+			appearance.setGender(gender);
+			appearance.setFace(face);
+			appearance.setVoice(voice);
+			appearance.setPitch(pitch);
+			appearance.setHead(head);
+			appearance.setHeadColor(headColor);
+			appearance.setUpper(upper);
+			appearance.setUpperColor(upperColor);
+			appearance.setLower(lower);
+			appearance.setLowerColor(lowerColor);
+			appearance.setChest(chest);
+			appearance.setChestColor(chestColor);
+			appearance.setWaist(waist);
+			appearance.setWaistColor(waistColor);
+			appearance.setHands(hands);
+			appearance.setHandsColor(handsColor);
+			appearance.setFeet(feet);
+			appearance.setFeetColor(feetColor);;
+			appearance.setAccessory1(accessory1);
+			appearance.setAccessory1Color(accessory1Color);
+			appearance.setAccessory2(accessory2);
+			appearance.setAccessory2Color(accessory2Color);
+			appearance.setFacePaint(facePaint);
+			
+			session = DB.getSession();
+			session.beginTransaction();
+			
+			session.save(character);
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
+			
 			bo = ctx.alloc().directBuffer(8);
-			bo.writeInt(0).writeInt(charId);
+			bo.writeInt(0).writeInt(character.getId());
 
 			Packets.write(ctx, 0x3102, bo);
 		} catch (Exception e) {
 			logger.error("Exception while creating character.", e);
-			Packets.writeError(ctx, 0x3102, 1);
+			DB.rollback(session);
+			DB.closeSession(session);
 			Util.safeRelease(bo);
+			Packets.writeError(ctx, 0x3102, 1);
 		}
 	}
 
 	public static void selectCharacter(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int index = bi.readByte();
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-			data.addProperty("index", index);
-
-			JsonObject response = Campbell.instance().getResponse("accounts", "selectCharacter", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while selecting character: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while selecting character: No User.");
 				Packets.writeError(ctx, 0x3104, 2);
 				return;
 			}
 
+			ByteBuf bi = in.getPayload();
+			int index = bi.readByte();
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			Query<Character> query = session.createQuery("from Character where user=:user", Character.class);
+			query.setParameter("user", user.getId());
+			List<Character> characters = query.list();
+
+			int numCharacters = characters.size();
+			if (index < 0 || index > numCharacters - 1) {
+				index = 0;
+			}
+
+			Character character = characters.get(index);
+			user.setCharacter(character.getId());
+
+			session.update(user);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
 			Packets.write(ctx, 0x3104, 0);
 		} catch (Exception e) {
 			logger.error("Exception while selecting character.", e);
+			DB.rollback(session);
+			DB.closeSession(session);
 			Packets.writeError(ctx, 0x3104, 1);
 		}
 	}
 
 	public static void deleteCharacter(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			int index = bi.readByte();
 
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-			data.addProperty("index", index);
-
-			JsonObject response = Campbell.instance().getResponse("accounts", "deleteCharacter", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while deleting character: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x3106, 2);
-				return;
-			}
+			session = DB.getSession();
+			session.beginTransaction();
+			
+			
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.write(ctx, 0x3106, 0);
 		} catch (Exception e) {
@@ -295,13 +326,24 @@ public class Accounts {
 	}
 
 	public static boolean onLobbyConnected(ChannelHandlerContext ctx, int lobbyId, User user) {
+//		Session session = null;
 		try {
 			if (!NUsers.initialize(ctx.channel(), user)) {
 				logger.error("Failed to initialize player during lobby connection.");
 				return false;
 			}
+			
+//			session = DB.getSession();
+//			session.beginTransaction();
+//			
+//			
+//			
+//			session.getTransaction().commit();
+//			DB.closeSession(session);
 		} catch (Exception e) {
 			logger.error("Exception while handling lobby connection.", e);
+//			DB.rollback(session);
+//			DB.closeSession(session);
 		}
 		return true;
 	}

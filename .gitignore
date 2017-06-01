@@ -1,4 +1,4 @@
-.DS_Store
+*.DS_Store
 .classpath
 .project
 .settings
@@ -15,4 +15,3 @@ buildNumber.properties
 .mvn/timing.properties
 hs_err_pid*
 nomad.properties
-

@@ -76,22 +76,27 @@ public class Nomad {
 		/**
 		 * Getting just the character (lazy)
 		 * 
-		 * FROM Character as c WHERE user=:user
+		 * FROM Character WHERE user=:user
 		 * 
 		 * Getting character and appearance in one query
 		 * 
 		 * FROM Character as c INNER JOIN FETCH c.appearance WHERE user=:user
 		 */
 
-		Query<Character> query = session.createQuery("FROM Character as c INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
+		Query<Character> query = session.createQuery("FROM Character AS c INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
 		query.setParameter("user", 1);
 		List<Character> characters = query.list();
 
 		for (Character character : characters) {
 			logger.debug("Character {} : {}", character.getId(), character.getName());
-
+			
 			CharacterAppearance appearance = character.getAppearances().get(0);
 			logger.debug("Appearance {} : {}", appearance.getId(), appearance.getGender());
+			
+			character.setComment("Hibernate test!");
+			session.update(character);
+			
+//			break;
 		}
 
 		session.getTransaction().commit();
@@ -114,10 +119,10 @@ public class Nomad {
 		
 		DB.initialize(dbUrl, dbUser, dbPassword);
 
-		testHibernate();
-		if (Math.sqrt(1) == 1) {
-			return;
-		}
+//		testHibernate();
+//		if (Math.sqrt(1) == 1) {
+//			return;
+//		}
 
 		Campbell campbell = Campbell.instance();
 		campbell.setBaseUrl("https://api.savemgo.com/campbell/");
