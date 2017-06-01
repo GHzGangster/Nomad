@@ -14,3 +14,5 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 hs_err_pid*
+nomad.properties
+
