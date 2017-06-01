@@ -11,19 +11,46 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
-import savemgo.nomad.Util;
+import savemgo.nomad.crypto.Crypto;
+import savemgo.nomad.util.Packets;
+import savemgo.nomad.util.Util;
 
 @Sharable
 public class PacketEncoder extends ChannelOutboundHandlerAdapter {
 
-	private static final Logger logger = LogManager.getLogger(PacketEncoder.class.getSimpleName());
+	private final int[] CRYPTED_IDS = { 0x4305 };
+
+	private static final Logger logger = LogManager.getLogger(PacketEncoder.class);
 
 	private static final AttributeKey<Integer> SEQUENCE_OUT = AttributeKey.valueOf("sequenceOut");
 
 	@Override
 	public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+		Packet packet = null;
 		try {
-			Packet packet = (Packet) msg;
+			packet = (Packet) msg;
+
+			final int command = packet.getCommand();
+			final int lenP = (packet.getPayload() != null) ? packet.getPayload().capacity() : 0;
+			final Packet fPacket = packet;
+
+			if (lenP > 0) {
+				logger.debug("Out - Command {} - {} bytes", String.format("%04x", command), lenP);
+				logger.debug(() -> ByteBufUtil.hexDump(fPacket.getPayload()));
+			} else {
+				logger.debug("Out - Command {}", String.format("%04x", command));
+			}
+
+			int pad = 0;
+			if (Packets.usesCrypto(CRYPTED_IDS, packet)) {
+				int lenPayload = packet.getPayload().readableBytes();
+				pad = 8 - (lenPayload % 8);
+				if (pad != 0) {
+					packet.getPayload().capacity(lenPayload + pad);
+					packet.getPayload().writeZero(pad);
+				}
+				Crypto.instancePacket().encrypt(packet.getPayload());
+			}
 
 			Attribute<Integer> sequenceAttr = ctx.channel().attr(SEQUENCE_OUT);
 			Integer sequenceInt = sequenceAttr.get();
@@ -36,13 +63,7 @@ public class PacketEncoder extends ChannelOutboundHandlerAdapter {
 			packet.setSequence(sequence);
 			packet.prepare();
 
-			logger.debug("Out - Command " + Integer.toHexString(packet.getCommand()) + " - " + packet.getPayloadLength()
-					+ " bytes");
-			if (packet.getPayloadLength() > 0) {
-				logger.debug("# {}", () -> ByteBufUtil.hexDump(packet.getPayload()));
-			}
-
-			int lengthPayload = packet.getPayloadLength();
+			final int lengthPayload = packet.getPayloadLength();
 
 			ByteBuf buffer = ctx.alloc().directBuffer(24 + lengthPayload);
 			buffer.writeBytes(packet.getHeader(), 0, 24);
@@ -50,15 +71,17 @@ public class PacketEncoder extends ChannelOutboundHandlerAdapter {
 				buffer.writeBytes(packet.getPayload(), 0, lengthPayload);
 			}
 
-			packet.release();
-
-			logger.debug(() -> ByteBufUtil.hexDump(buffer));
-
 			Util.xor(buffer, buffer.readableBytes(), Util.KEY_XOR);
-
+			
+			// if (ctx.channel().isOpen() && ctx.channel().isWritable()) {
 			ctx.write(buffer, ctx.voidPromise());
+			// }
 		} catch (Exception e) {
 			logger.error("Failed to encode packet.", e);
+		} finally {
+			if (packet != null) {
+				packet.release();
+			}
 		}
 	}
 

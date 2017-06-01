@@ -5,42 +5,32 @@ import org.apache.logging.log4j.Logger;
 
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.helper.Lobbies;
-import savemgo.nomad.helper.News;
+import savemgo.nomad.NomadLobby;
+import savemgo.nomad.helper.Hub;
 import savemgo.nomad.packet.Packet;
-import savemgo.nomad.server.Lobby;
 
 @Sharable
-public class GateLobby extends Lobby {
+public class GateLobby extends NomadLobby {
 
-	private static final Logger logger = LogManager.getLogger(GateLobby.class.getSimpleName());
+	private static final Logger logger = LogManager.getLogger(GateLobby.class);
 
 	public GateLobby(int id) {
-		super(id);
+		super(id, 0, 0);
 	}
 
 	@Override
-	public boolean readPacket(ChannelHandlerContext ctx, Packet in) {
+	public boolean handlePacket(ChannelHandlerContext ctx, Packet in) {
 		int command = in.getCommand();
 
 		switch (command) {
 
-		/** General */
-		case 0x0003:
-			ctx.close();
-			break;
-
-		case 0x0005:
-			ctx.write(new Packet(0x0005));
-			break;
-
 		/** Main Lobby */
 		case 0x2005:
-			Lobbies.getLobbyList(ctx);
+			Hub.getLobbyList(ctx);
 			break;
 
 		case 0x2008:
-			News.getNews(ctx);
+			Hub.getNews(ctx);
 			break;
 
 		default:

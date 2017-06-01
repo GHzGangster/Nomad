@@ -12,13 +12,13 @@ import org.apache.logging.log4j.Logger;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
-import savemgo.nomad.Util;
+import savemgo.nomad.util.Util;
 
 public class Packet {
 
-	private static final Logger logger = LogManager.getLogger(Packet.class.getSimpleName());
+	private static final Logger logger = LogManager.getLogger(Packet.class);
 
-	private static final int ERROR_MASK = 0xDAB055 << 8;
+	private static final int ERROR_MASK = 0xC0FFEE << 8;
 
 	public static final int OFFSET_COMMAND = 0x0;
 	public static final int OFFSET_PAYLOAD_LENGTH = 0x2;
@@ -107,7 +107,7 @@ public class Packet {
 	public int getSequence() {
 		int result = 0;
 		try {
-			result = header.getShort(OFFSET_SEQUENCE);
+			result = header.getInt(OFFSET_SEQUENCE);
 		} catch (IndexOutOfBoundsException e) {
 			//
 		}
@@ -200,10 +200,8 @@ public class Packet {
 	}
 
 	public void release() {
-		header.release();
-		if (payload != null) {
-			payload.release();
-		}
+		Util.releaseBuffer(header);
+		Util.releaseBuffer(payload);
 	}
 
 }

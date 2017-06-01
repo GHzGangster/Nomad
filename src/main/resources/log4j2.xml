@@ -2,12 +2,21 @@
 <Configuration status="WARN">
 	<Appenders>
 		<Console name="Console" target="SYSTEM_OUT">
-			<PatternLayout pattern="[%d{HH:mm:ss.SSS} %-5level %logger{36}] %msg%n"/>
+			<PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %-14logger{1} %msg%n" />
 		</Console>
 	</Appenders>
 	<Loggers>
+		<Logger name="io.netty" level="ERROR" />
+		<Logger name="org.hibernate" level="DEBUG" />
+		<Logger name="com.mchange" level="ERROR" />
+		<Logger name="com.mchange.v2.c3p0" level="INFO">
+			<AppenderRef ref="Console" />
+		</Logger>
+		<Logger name="com.mchange.v2.resourcepool" level="INFO">
+			<AppenderRef ref="Console" />
+		</Logger>
 		<Root level="DEBUG">
-			<AppenderRef ref="Console"/>
+			<AppenderRef ref="Console" />
 		</Root>
 	</Loggers>
 </Configuration>

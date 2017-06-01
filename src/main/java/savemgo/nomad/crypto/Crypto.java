@@ -1,24 +1,31 @@
 package savemgo.nomad.crypto;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
-import io.netty.buffer.UnpooledByteBufAllocator;
 
-public class KCrypt {
+public class Crypto {
 
-	private static KCrypt instance = null;
+	private static Crypto instanceAuth = null, instancePacket = null;
 
-	private final ByteBuf ck = Unpooled.wrappedBuffer(Constants.CRYPTO_AUTH);
+	private final ByteBuf ck;
 
-	private KCrypt() {
-
+	private Crypto(byte[] k) {
+		this.ck = Unpooled.wrappedBuffer(k);
 	}
 
-	public static KCrypt instance() {
-		if (instance == null) {
-			instance = new KCrypt();
+	public static Crypto instanceAuth() {
+		if (instanceAuth == null) {
+			instanceAuth = new Crypto(Constants.CRYPTO_AUTH);
 		}
-		return instance;
+		return instanceAuth;
+	}
+
+	public static Crypto instancePacket() {
+		if (instancePacket == null) {
+			instancePacket = new Crypto(Constants.CRYPTO_PACKET);
+		}
+		return instancePacket;
 	}
 
 	public byte[] decrypt(byte[] bytes) {
@@ -26,7 +33,7 @@ public class KCrypt {
 		byte[] result = null;
 		try {
 			c = Unpooled.wrappedBuffer(bytes);
-			p = UnpooledByteBufAllocator.DEFAULT.directBuffer(bytes.length);
+			p = PooledByteBufAllocator.DEFAULT.directBuffer(bytes.length);
 			decrypt(p, c);
 			result = new byte[bytes.length];
 			p.getBytes(0, result);
@@ -39,6 +46,10 @@ public class KCrypt {
 			}
 		}
 		return result;
+	}
+
+	public void decrypt(ByteBuf b) {
+		decrypt(b, b);
 	}
 
 	public void decrypt(ByteBuf p, ByteBuf c) {
@@ -90,7 +101,7 @@ public class KCrypt {
 			k = ck.getInt(0x0);
 			a ^= k;
 
-			p.writeInt(a).writeInt(b);
+			p.setInt(i * 8, a).setInt(i * 8 + 4, b);
 		}
 	}
 
@@ -98,7 +109,7 @@ public class KCrypt {
 		ByteBuf c = null, p = null;
 		byte[] result = null;
 		try {
-			c = UnpooledByteBufAllocator.DEFAULT.directBuffer(bytes.length);
+			c = PooledByteBufAllocator.DEFAULT.directBuffer(bytes.length);
 			p = Unpooled.wrappedBuffer(bytes);
 			encrypt(p, c);
 			result = new byte[bytes.length];
@@ -113,7 +124,11 @@ public class KCrypt {
 		}
 		return result;
 	}
-	
+
+	public void encrypt(ByteBuf b) {
+		encrypt(b, b);
+	}
+
 	public void encrypt(ByteBuf p, ByteBuf c) {
 		int blocks = p.capacity() / 8;
 
@@ -163,7 +178,7 @@ public class KCrypt {
 			k = ck.getInt(0x44);
 			a ^= k;
 
-			c.writeInt(a).writeInt(b);
+			c.setInt(i * 8, a).setInt(i * 8 + 4, b);
 		}
 	}
 

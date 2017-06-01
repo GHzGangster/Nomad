@@ -1,4 +1,4 @@
-package savemgo.nomad.server;
+package savemgo.nomad;
 
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
@@ -9,15 +9,15 @@ import io.netty.util.concurrent.EventExecutorGroup;
 import savemgo.nomad.packet.PacketDecoder;
 import savemgo.nomad.packet.PacketEncoder;
 
-public class ServerInitializer extends ChannelInitializer<SocketChannel> {
+public class ServerHandler extends ChannelInitializer<SocketChannel> {
 
 	private static final PacketEncoder HANDLER_ENCODER = new PacketEncoder();
 	private static final PacketDecoder HANDLER_DECODER = new PacketDecoder();
 
-	private final Lobby lobby;
+	private final NomadLobby lobby;
 	private final EventExecutorGroup eventExecutor;
 
-	public ServerInitializer(Lobby lobby, int executorThreads) {
+	public ServerHandler(NomadLobby lobby, int executorThreads) {
 		this.lobby = lobby;
 		eventExecutor = new DefaultEventExecutorGroup(executorThreads);
 	}
@@ -25,10 +25,10 @@ public class ServerInitializer extends ChannelInitializer<SocketChannel> {
 	@Override
 	public void initChannel(SocketChannel ch) throws Exception {
 		ChannelPipeline pipeline = ch.pipeline();
-		pipeline.addLast("timeout", new ReadTimeoutHandler(300));
-		pipeline.addLast("packetEncoder", HANDLER_ENCODER);
-		pipeline.addLast("packetDecoder", HANDLER_DECODER);
-		pipeline.addLast(eventExecutor, "packetHandler", lobby);
+		pipeline.addLast("encoder", HANDLER_ENCODER);
+		pipeline.addLast("decoder", HANDLER_DECODER);
+		pipeline.addLast("timeout", new ReadTimeoutHandler(60));
+		pipeline.addLast(eventExecutor, "lobby", lobby);
 	}
 
 }

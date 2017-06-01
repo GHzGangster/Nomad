@@ -1,4 +1,4 @@
-package savemgo.nomad.server;
+package savemgo.nomad;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -14,21 +14,26 @@ public class NomadServer {
 	private ServerBootstrap sb;
 	private ChannelFuture future;
 
-	public NomadServer(Lobby lobby, String ip, int port, EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
+	public NomadServer(NomadLobby lobby, String ip, int port, EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
 		this(lobby, ip, port, bossGroup, workerGroup, 16);
 	}
 
-	public NomadServer(Lobby lobby, String ip, int port, EventLoopGroup bossGroup, EventLoopGroup workerGroup,
+	public NomadServer(NomadLobby lobby, String ip, int port, EventLoopGroup bossGroup, EventLoopGroup workerGroup,
 			int executorThreads) {
 		sb = new ServerBootstrap();
 		sb.group(bossGroup, workerGroup);
 		sb.channel(NioServerSocketChannel.class);
-		sb.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT).option(ChannelOption.SO_BACKLOG, 512)
-				.option(ChannelOption.SO_RCVBUF, 1024).option(ChannelOption.SO_SNDBUF, 1024)
-				.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024));
-		sb.childOption(ChannelOption.SO_KEEPALIVE, true).childOption(ChannelOption.WRITE_BUFFER_WATER_MARK,
-				new WriteBufferWaterMark(8 * 1024, 32 * 1024));
-		sb.childHandler(new ServerInitializer(lobby, executorThreads));
+
+		sb.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
+		// sb.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10 * 1000);
+		sb.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024));
+		sb.option(ChannelOption.SO_BACKLOG, 1024);
+		sb.option(ChannelOption.SO_SNDBUF, 1024 * 1024);
+		sb.option(ChannelOption.SO_RCVBUF, 1024 * 1024);
+		sb.option(ChannelOption.SO_REUSEADDR, true);
+		// sb.option(ChannelOption.TCP_NODELAY, true);
+
+		sb.childHandler(new ServerHandler(lobby, executorThreads));
 		sb.localAddress(ip, port);
 	}
 

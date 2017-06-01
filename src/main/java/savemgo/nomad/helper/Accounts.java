@@ -2,159 +2,173 @@ package savemgo.nomad.helper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 
-import org.apache.commons.codec.binary.Base64;
+import javax.persistence.criteria.CriteriaBuilder;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.MultiIdentifierLoadAccess;
+import org.hibernate.Session;
+import org.hibernate.query.Query;
 
-import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.AttrUtil;
-import savemgo.nomad.TypeUtil;
-import savemgo.nomad.Util;
 import savemgo.nomad.campbell.Campbell;
-import savemgo.nomad.crypto.KCrypt;
+import savemgo.nomad.crypto.Crypto;
+import savemgo.nomad.db.DB;
+import savemgo.nomad.entity.Character;
+import savemgo.nomad.entity.CharacterAppearance;
+import savemgo.nomad.entity.User;
+import savemgo.nomad.instance.NUsers;
 import savemgo.nomad.packet.Packet;
+import savemgo.nomad.util.Packets;
+import savemgo.nomad.util.Util;
 
 public class Accounts {
 
-	private static final Logger logger = LogManager.getLogger(Accounts.class.getSimpleName());
+	private static final Logger logger = LogManager.getLogger(Accounts.class);
 
 	private static final byte[] XOR_SESSION_ID = new byte[] { (byte) 0x35, (byte) 0xd5, (byte) 0xc3, (byte) 0x8e,
 			(byte) 0xd0, (byte) 0x11, (byte) 0x0e, (byte) 0xa8 };
 
-	public static void checkSession(ChannelHandlerContext ctx, Packet in) {
-		try {
-			int length = in.getPayloadLength();
-			logger.debug("Length: " + length);
+	/**
+	 * Definitely <i>not</i> the right way to do this...<br>
+	 * Should figure out the right way in the future...
+	 * 
+	 * @param full
+	 * @return
+	 */
+	public static byte[] decryptSessionId(byte[] full) {
+		byte[] bytes = new byte[8];
+		System.arraycopy(full, 0, bytes, 0, bytes.length);
+		Util.xor(bytes, XOR_SESSION_ID);
+		return Crypto.instanceAuth().encrypt(bytes);
+	}
 
+	public static boolean checkSession(ChannelHandlerContext ctx, Packet in, int lobbyId, boolean isCharaId) {
+		Session session = null;
+		try {
 			ByteBuf bi = in.getPayload();
 			int id = bi.readInt();
 			byte[] bytes = new byte[16];
 			bi.readBytes(bytes);
 
-			byte[] sessionId = decryptSessionId(bytes);
-			String sessionIdStr = new String(sessionId, StandardCharsets.ISO_8859_1);
+			byte[] mgo2SessionBytes = decryptSessionId(bytes);
+			String mgo2Session = new String(mgo2SessionBytes, StandardCharsets.ISO_8859_1);
 
-			int type = 0;
+			session = DB.getSession();
+			session.beginTransaction();
 
-			Map<String, Object> data = new LinkedHashMap<>();
-			data.put("type", type);
-			data.put("id", id);
-			data.put("session", sessionIdStr);
+			Query<User> query = session.createQuery("FROM User WHERE session=:session", User.class);
+			query.setParameter("session", mgo2Session);
 
-			Map<String, Object> response = Campbell.instance().getResponse("auth", "checkSession", data);
+			User user = query.uniqueResult();
 
-			String result = TypeUtil.toString(response.get("result"));
-			if (!result.equals("NOERR")) {
-				logger.error("Error while checking session: " + result);
-				ctx.write(new Packet(0x3004, 2));
-				return;
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			if (user == null) {
+				logger.error("Error while checking session: Bad session.");
+				Packets.write(ctx, 0x3004, 1);
+				return false;
 			}
 
-			AttrUtil.setSession(ctx, sessionIdStr);
-			ctx.write(new Packet(0x3004, 0, true));
+			boolean okay = isCharaId ? id == user.getCharacter() : id == user.getId();
+			if (!okay) {
+				logger.error("Error while checking session: Bad id.");
+				Packets.write(ctx, 0x3004, 1);
+				return false;
+			}
+
+			if (!onLobbyConnected(ctx, lobbyId, user)) {
+				Packets.write(ctx, 0x3004, 2);
+				return false;
+			}
+
+			Packets.write(ctx, 0x3004, 0);
 		} catch (Exception e) {
 			logger.error("Exception while checking session.", e);
-			ctx.write(new Packet(0x3004, 1));
+			DB.closeSession(session);
+			Packets.writeError(ctx, 0x3004, 1);
+			return false;
 		}
+		return true;
 	}
-
-	private static byte[] decryptSessionId(byte[] full) {
-		byte[] bytes = new byte[8];
-		System.arraycopy(full, 0, bytes, 0, bytes.length);
-		Util.xor(bytes, XOR_SESSION_ID);
-		return KCrypt.instance().encrypt(bytes);
-	}
-
-	private static final byte[] CHARLIST_END = new byte[] { (byte) 0x07, (byte) 0x00, (byte) 0x03 };
 
 	public static void getCharacterList(ChannelHandlerContext ctx) {
+		ByteBuf bo = null;
+		Session session = null;
 		try {
-			Map<String, Object> data = new LinkedHashMap<>();
-			data.put("session", AttrUtil.getSession(ctx));
-
-			Map<String, Object> response = Campbell.instance().getResponse("auth", "getCharacterList", data);
-
-			String result = TypeUtil.toString(response.get("result"));
-			if (!result.equals("NOERR")) {
-				logger.error("Error while checking session: " + result);
-				ctx.write(new Packet(0x3049, 2));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting character list: No User.");
+				Packets.writeError(ctx, 0x3049, 2);
 				return;
 			}
 
-			String bytes1Encoded = TypeUtil.toString(response.get("bytes1"));
-			byte[] bytes1 = Base64.decodeBase64(bytes1Encoded);
-			
-			int slots = TypeUtil.toInt(response.get("slots"));
-			ArrayList<LinkedTreeMap<String, Object>> chars = TypeUtil.cast(response.get("chars"));
-			int numChars = Math.min(chars.size(), 8);
-			
-			ByteBuf bo = ctx.alloc().directBuffer(0x1d7);
-			bo.writeInt(0).writeByte(slots).writeByte(numChars).writeZero(1);
+			session = DB.getSession();
+			session.beginTransaction();
 
-			for (int i = 0; i < numChars; i++) {
-				LinkedTreeMap<String, Object> chara = chars.get(i);
-				
-				int id = TypeUtil.toInt(chara.get("id"));
-				String name = TypeUtil.toString(chara.get("name"));
+			Query<Character> query = session.createQuery(
+					"FROM Character as c INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
+			query.setParameter("user", user.getId());
+			List<Character> characters = query.list();
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
-				LinkedTreeMap<String, Object> appearance = TypeUtil.cast(chara.get("appearance"));
-				int gender = TypeUtil.toInt(appearance.get("gender"));
-				int face = TypeUtil.toInt(appearance.get("face"));
-				int voice = TypeUtil.toInt(appearance.get("voice"));
-				int pitch = TypeUtil.toInt(appearance.get("pitch"));
-				int head = TypeUtil.toInt(appearance.get("head"));
-				int headColor = TypeUtil.toInt(appearance.get("headColor"));
-				int upper = TypeUtil.toInt(appearance.get("upper"));
-				int upperColor = TypeUtil.toInt(appearance.get("upperColor"));
-				int lower = TypeUtil.toInt(appearance.get("lower"));
-				int lowerColor = TypeUtil.toInt(appearance.get("lowerColor"));
-				int chest = TypeUtil.toInt(appearance.get("chest"));
-				int chestColor = TypeUtil.toInt(appearance.get("chestColor"));
-				int waist = TypeUtil.toInt(appearance.get("waist"));
-				int waistColor = TypeUtil.toInt(appearance.get("waistColor"));
-				int hands = TypeUtil.toInt(appearance.get("hands"));
-				int handsColor = TypeUtil.toInt(appearance.get("handsColor"));
-				int feet = TypeUtil.toInt(appearance.get("feet"));
-				int feetColor = TypeUtil.toInt(appearance.get("feetColor"));
-				int accessory1 = TypeUtil.toInt(appearance.get("accessory1"));
-				int accessory1Color = TypeUtil.toInt(appearance.get("accessory1Color"));
-				int accessory2 = TypeUtil.toInt(appearance.get("accessory2"));
-				int accessory2Color = TypeUtil.toInt(appearance.get("accessory2Color"));
-				int facePaint = TypeUtil.toInt(appearance.get("facePaint"));
+			int numCharacters = characters.size();
+			
+			bo = ctx.alloc().directBuffer(0x1d7);
+			bo.writeInt(0).writeByte(user.getSlots()).writeByte(numCharacters).writeZero(1);
+
+			for (int i = 0; i < numCharacters; i++) {
+				Character chara = characters.get(i);
+				CharacterAppearance app = chara.getAppearances().get(0);
 
 				if (i == 0) {
-					Util.writeString(name, 16, bo);
+					Util.writeString(chara.getName(), 16, bo);
 					bo.writeZero(1);
 				} else {
 					bo.writeInt(i);
 				}
-				bo.writeInt(id);
-				Util.writeString(name, 16, bo);
-				bo.writeByte(gender).writeByte(face).writeByte(upper).writeByte(lower).writeByte(facePaint)
-						.writeByte(upperColor).writeByte(lowerColor).writeByte(voice).writeByte(pitch).writeZero(4)
-						.writeByte(head).writeByte(chest).writeByte(hands).writeByte(waist).writeByte(feet)
-						.writeByte(accessory1).writeByte(accessory2).writeByte(headColor).writeByte(chestColor)
-						.writeByte(handsColor).writeByte(waistColor).writeByte(feetColor).writeByte(accessory1Color)
-						.writeByte(accessory2Color).writeZero(1);
+
+				bo.writeInt(chara.getId());
+				Util.writeString(chara.getName(), 16, bo);
+				bo.writeByte(app.getGender()).writeByte(app.getFace()).writeByte(app.getUpper())
+						.writeByte(app.getLower()).writeByte(app.getFacePaint()).writeByte(app.getUpperColor())
+						.writeByte(app.getLowerColor()).writeByte(app.getVoice()).writeByte(app.getPitch()).writeZero(4)
+						.writeByte(app.getHead()).writeByte(app.getChest()).writeByte(app.getHands())
+						.writeByte(app.getWaist()).writeByte(app.getFeet()).writeByte(app.getAccessory1())
+						.writeByte(app.getAccessory2()).writeByte(app.getHeadColor()).writeByte(app.getChestColor())
+						.writeByte(app.getHandsColor()).writeByte(app.getWaistColor()).writeByte(app.getFeetColor())
+						.writeByte(app.getAccessory1Color()).writeByte(app.getAccessory2Color()).writeZero(1);
 			}
-			
+
+			byte[] bytes1 = { (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x07, (byte) 0x00, (byte) 0x03,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
+
 			bo.writeZero(0x1b4 - bo.writerIndex());
 			bo.writeBytes(bytes1);
 
-			ctx.write(new Packet(0x3049, bo));
+			Packets.write(ctx, 0x3049, bo);
 		} catch (Exception e) {
-			logger.error("Exception while checking session.", e);
-			ctx.write(new Packet(0x3049, 1));
+			logger.error("Exception while getting character list.", e);
+			DB.rollback(session);
+			DB.closeSession(session);
+			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x3049, 1);
 		}
 	}
 
 	public static void createCharacter(ChannelHandlerContext ctx, Packet in) {
+		ByteBuf bo = null;
 		try {
 			ByteBuf bi = in.getPayload();
 
@@ -187,46 +201,50 @@ public class Accounts {
 			int accessory1Color = bi.readByte();
 			int accessory2Color = bi.readByte();
 
-			Map<String, Object> data = new LinkedHashMap<>();
-			data.put("session", AttrUtil.getSession(ctx));
-			data.put("name", name);
-			data.put("gender", gender);
-			data.put("face", face);
-			data.put("voice", voice);
-			data.put("pitch", pitch);
-			data.put("head", head);
-			data.put("headColor", headColor);
-			data.put("upper", upper);
-			data.put("upperColor", upperColor);
-			data.put("lower", lower);
-			data.put("lowerColor", lowerColor);
-			data.put("chest", chest);
-			data.put("chestColor", chestColor);
-			data.put("waist", waist);
-			data.put("waistColor", waistColor);
-			data.put("hands", hands);
-			data.put("handsColor", handsColor);
-			data.put("feet", feet);
-			data.put("feetColor", feetColor);
-			data.put("accessory1", accessory1);
-			data.put("accessory1Color", accessory1Color);
-			data.put("accessory2", accessory2);
-			data.put("accessory2Color", accessory2Color);
-			data.put("facePaint", facePaint);
+			JsonObject data = new JsonObject();
+			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("name", name);
+			data.addProperty("gender", gender);
+			data.addProperty("face", face);
+			data.addProperty("voice", voice);
+			data.addProperty("pitch", pitch);
+			data.addProperty("head", head);
+			data.addProperty("headColor", headColor);
+			data.addProperty("upper", upper);
+			data.addProperty("upperColor", upperColor);
+			data.addProperty("lower", lower);
+			data.addProperty("lowerColor", lowerColor);
+			data.addProperty("chest", chest);
+			data.addProperty("chestColor", chestColor);
+			data.addProperty("waist", waist);
+			data.addProperty("waistColor", waistColor);
+			data.addProperty("hands", hands);
+			data.addProperty("handsColor", handsColor);
+			data.addProperty("feet", feet);
+			data.addProperty("feetColor", feetColor);
+			data.addProperty("accessory1", accessory1);
+			data.addProperty("accessory1Color", accessory1Color);
+			data.addProperty("accessory2", accessory2);
+			data.addProperty("accessory2Color", accessory2Color);
+			data.addProperty("facePaint", facePaint);
 
-			Map<String, Object> response = Campbell.instance().getResponse("auth", "createCharacter", data);
-
-			String result = TypeUtil.toString(response.get("result"));
-			if (!result.equals("NOERR")) {
-				logger.error("Error while creating character: " + result);
-				ctx.write(new Packet(0x3102, 2));
+			JsonObject response = Campbell.instance().getResponse("accounts", "createCharacter", data);
+			if (!Campbell.checkResult(response)) {
+				logger.error("Error while creating character: " + Campbell.getResult(response));
+				Packets.writeError(ctx, 0x3102, 2);
 				return;
 			}
 
-			ctx.write(new Packet(0x3102));
+			int charId = response.get("chara").getAsInt();
+
+			bo = ctx.alloc().directBuffer(8);
+			bo.writeInt(0).writeInt(charId);
+
+			Packets.write(ctx, 0x3102, bo);
 		} catch (Exception e) {
 			logger.error("Exception while creating character.", e);
-			ctx.write(new Packet(0x3102, 1));
+			Packets.writeError(ctx, 0x3102, 1);
+			Util.safeRelease(bo);
 		}
 	}
 
@@ -235,48 +253,70 @@ public class Accounts {
 			ByteBuf bi = in.getPayload();
 			int index = bi.readByte();
 
-			Map<String, Object> data = new LinkedHashMap<>();
-			data.put("session", AttrUtil.getSession(ctx));
-			data.put("index", index);
+			JsonObject data = new JsonObject();
+			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("index", index);
 
-			Map<String, Object> response = Campbell.instance().getResponse("auth", "selectCharacter", data);
-
-			String result = TypeUtil.toString(response.get("result"));
-			if (!result.equals("NOERR")) {
-				logger.error("Error while selecting character: " + result);
-				ctx.write(new Packet(0x3104, 2));
+			JsonObject response = Campbell.instance().getResponse("accounts", "selectCharacter", data);
+			if (!Campbell.checkResult(response)) {
+				logger.error("Error while selecting character: " + Campbell.getResult(response));
+				Packets.writeError(ctx, 0x3104, 2);
 				return;
 			}
 
-			ctx.write(new Packet(0x3104, 0, true));
+			Packets.write(ctx, 0x3104, 0);
 		} catch (Exception e) {
 			logger.error("Exception while selecting character.", e);
-			ctx.write(new Packet(0x3104, 1));
+			Packets.writeError(ctx, 0x3104, 1);
 		}
 	}
-	
+
 	public static void deleteCharacter(ChannelHandlerContext ctx, Packet in) {
 		try {
 			ByteBuf bi = in.getPayload();
 			int index = bi.readByte();
 
-			Map<String, Object> data = new LinkedHashMap<>();
-			data.put("session", AttrUtil.getSession(ctx));
-			data.put("index", index);
+			JsonObject data = new JsonObject();
+			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("index", index);
 
-			Map<String, Object> response = Campbell.instance().getResponse("auth", "deleteCharacter", data);
-
-			String result = TypeUtil.toString(response.get("result"));
-			if (!result.equals("NOERR")) {
-				logger.error("Error while deleting character: " + result);
-				ctx.write(new Packet(0x3106, 2));
+			JsonObject response = Campbell.instance().getResponse("accounts", "deleteCharacter", data);
+			if (!Campbell.checkResult(response)) {
+				logger.error("Error while deleting character: " + Campbell.getResult(response));
+				Packets.writeError(ctx, 0x3106, 2);
 				return;
 			}
 
-			ctx.write(new Packet(0x3106, 0, true));
+			Packets.write(ctx, 0x3106, 0);
 		} catch (Exception e) {
 			logger.error("Exception while deleting character.", e);
-			ctx.write(new Packet(0x3106, 1));
+			Packets.writeError(ctx, 0x3106, 1);
+		}
+	}
+
+	public static boolean onLobbyConnected(ChannelHandlerContext ctx, int lobbyId, User user) {
+		try {
+			if (!NUsers.initialize(ctx.channel(), user)) {
+				logger.error("Failed to initialize player during lobby connection.");
+				return false;
+			}
+		} catch (Exception e) {
+			logger.error("Exception while handling lobby connection.", e);
+		}
+		return true;
+	}
+
+	public static void onLobbyDisconnected(ChannelHandlerContext ctx, int lobbyId) {
+		try {
+			// TODO: Clean up anything we have to, like the player's rooms? Be
+			// sure to make sure rooms aren't disappeaing.
+
+			if (!NUsers.finalize(ctx.channel())) {
+				logger.error("Failed to finalize user during lobby disconnection.");
+				return;
+			}
+		} catch (Exception e) {
+			logger.error("Exception while handling lobby disconnection.", e);
 		}
 	}
 
