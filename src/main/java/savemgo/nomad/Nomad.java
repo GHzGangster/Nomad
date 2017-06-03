@@ -7,6 +7,7 @@ import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.query.Query;
 
@@ -16,7 +17,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
-import savemgo.nomad.entity.CharacterAppearance;
+import savemgo.nomad.entity.CharacterFriend;
 import savemgo.nomad.lobby.AccountLobby;
 import savemgo.nomad.lobby.GameLobby;
 import savemgo.nomad.lobby.GateLobby;
@@ -83,21 +84,53 @@ public class Nomad {
 		 * FROM Character as c INNER JOIN FETCH c.appearance WHERE user=:user
 		 */
 
-		Query<Character> query = session.createQuery("FROM Character AS c INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
-		query.setParameter("user", 1);
-		List<Character> characters = query.list();
+		// Query<Character> query = session.createQuery("FROM Character AS c
+		// INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
+		// query.setParameter("user", 1);
+		// List<Character> characters = query.list();
+		//
+		// for (Character character : characters) {
+		// logger.debug("Character {} : {}", character.getId(),
+		// character.getName());
+		//
+		// CharacterAppearance appearance = character.getAppearances().get(0);
+		// logger.debug("Appearance {} : {}", appearance.getId(),
+		// appearance.getGender());
+		//
+		// character.setComment("Hibernate test!");
+		// session.update(character);
+		//
+		// break;
+		// }
 
-		for (Character character : characters) {
-			logger.debug("Character {} : {}", character.getId(), character.getName());
-			
-			CharacterAppearance appearance = character.getAppearances().get(0);
-			logger.debug("Appearance {} : {}", appearance.getId(), appearance.getGender());
-			
-			character.setComment("Hibernate test!");
-			session.update(character);
-			
-//			break;
-		}
+		// Query<User> query = session.createQuery(
+		// "from User as u left join fetch u.currentCharacter left join fetch
+		// u.characters where u.id=1",
+		// User.class);
+		// User user = query.uniqueResult();
+
+		// user.setDisplayName("GHz Test 001");
+		// session.update(user);
+
+		// logger.debug("User {} : {}", user.getId(), user.getDisplayName());
+		// logger.debug("Current Character ID: {}",
+		// user.getCurrentCharacterId());
+		// logger.debug("Current Character: {}", user.getCurrentCharacter());
+
+		// List<Character> characterList = user.getCurrentCharacter();
+		// logger.debug("Character List: {}", characterList);
+
+		Query<Character> query = session.createQuery("from Character where id=1", Character.class);
+		Character character = query.uniqueResult();
+
+		List<CharacterFriend> friendsBlocked = character.getFriends();
+
+		Hibernate.initialize(friendsBlocked);
+
+		// logger.debug("Character {} : {}", character.getId(),
+		// character.getName());
+		//
+		// logger.debug("User ID: {}", character.getUserId());
 
 		session.getTransaction().commit();
 		DB.closeSession(session);
@@ -116,13 +149,13 @@ public class Nomad {
 		} catch (Exception e) {
 			logger.error("Error while reading properties file.", e);
 		}
-		
+
 		DB.initialize(dbUrl, dbUser, dbPassword);
 
-//		testHibernate();
-//		if (Math.sqrt(1) == 1) {
-//			return;
-//		}
+		// testHibernate();
+		// if (Math.sqrt(1) == 1) {
+		// return;
+		// }
 
 		Campbell campbell = Campbell.instance();
 		campbell.setBaseUrl("https://api.savemgo.com/campbell/");
@@ -147,13 +180,12 @@ public class Nomad {
 					workersPerServer);
 			NomadServer serverAccount = new NomadServer(accountLobby, "0.0.0.0", 5732, bossGroup, workerGroup,
 					workersPerServer);
-			// NomadServer serverGame = new NomadServer(gameLobby, "0.0.0.0",
-			// 5733, bossGroup, workerGroup);
+			NomadServer serverGame = new NomadServer(gameLobby, "0.0.0.0", 5733, bossGroup, workerGroup);
 
 			// serverGate.start();
 			serverGateNa.start();
 			serverAccount.start();
-			// serverGame.start();
+			serverGame.start();
 
 			logger.info("Started server.");
 

@@ -666,7 +666,7 @@ public class Games {
 			String password = Util.readString(bi, 16);
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("game", gameId);
 			data.addProperty("password", password);
 
@@ -684,7 +684,7 @@ public class Games {
 			int rule = response.get("rule").getAsInt();
 			int map = response.get("map").getAsInt();
 
-			NUsers.setGameJoining(ctx, gameId);
+//			NUsers.setGameJoining(ctx, gameId);
 			
 			bo = ctx.alloc().directBuffer(0x2b);
 
@@ -705,7 +705,7 @@ public class Games {
 	
 	public static void joinFailed(ChannelHandlerContext ctx, Packet in) {
 		try {
-			NUsers.setGameJoining(ctx, 0);
+//			NUsers.setGameJoining(ctx, 0);
 
 			Packets.write(ctx, 0x4323, 0);
 		} catch (Exception e) {

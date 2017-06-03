@@ -29,7 +29,7 @@ public class Hub {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<Lobby> query = session.createQuery("FROM Lobby", Lobby.class);
+			Query<Lobby> query = session.createQuery("from Lobby", Lobby.class);
 			List<Lobby> lobbies = query.list();
 
 			session.getTransaction().commit();
@@ -53,8 +53,7 @@ public class Hub {
 			Packets.write(ctx, 0x4903, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting game lobby info.", e);
-			DB.rollback(session);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffers(payloads);
 			Packets.writeError(ctx, 0x4901, 1);
 		}
@@ -67,7 +66,7 @@ public class Hub {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<Lobby> query = session.createQuery("FROM Lobby", Lobby.class);
+			Query<Lobby> query = session.createQuery("from Lobby", Lobby.class);
 			List<Lobby> lobbies = query.list();
 
 			session.getTransaction().commit();
@@ -101,8 +100,7 @@ public class Hub {
 			Packets.write(ctx, 0x2004, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting lobby list.", e);
-			DB.rollback(session);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffers(payloads);
 			Packets.writeError(ctx, 0x2002, 1);
 		}
@@ -116,7 +114,7 @@ public class Hub {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<News> query = session.createQuery("FROM News", News.class);
+			Query<News> query = session.createQuery("from News", News.class);
 			List<News> news = query.list();
 
 			session.getTransaction().commit();
@@ -147,8 +145,7 @@ public class Hub {
 			Packets.write(ctx, 0x200b, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting news.", e);
-			DB.rollback(session);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffers(bos);
 			Packets.writeError(ctx, 0x2009, 1);
 		}

@@ -19,6 +19,9 @@ public class CharacterAppearance {
 	@Id
 	private Integer id;
 
+	@Column(name = "chara", nullable = false, insertable = false, updatable = false)
+	private Integer characterId;
+	
 	@JoinColumn(name = "chara")
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
 	private Character character;
@@ -294,6 +297,14 @@ public class CharacterAppearance {
 
 	public void setFacePaint(Integer facePaint) {
 		this.facePaint = facePaint;
+	}
+
+	public Integer getCharacterId() {
+		return characterId;
+	}
+
+	public void setCharacterId(Integer characterId) {
+		this.characterId = characterId;
 	}
 
 }

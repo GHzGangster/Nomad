@@ -9,6 +9,9 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.util.CharsetUtil;
@@ -22,6 +25,16 @@ public class Util {
 			(byte) 0x4A, (byte) 0x34, (byte) 0x36, (byte) 0x54, (byte) 0x7A, (byte) 0x47, (byte) 0x46, (byte) 0x2D,
 			(byte) 0x38, (byte) 0x79, (byte) 0x78 };
 
+	private static final Gson GSON = new Gson();
+	
+	public static JsonObject jsonDecode(String json) {
+		return GSON.fromJson(json, JsonObject.class);
+	}
+	
+	public static String jsonEncode(JsonObject obj) {
+		return GSON.toJson(obj);
+	}
+	
 	@SuppressWarnings({ "unchecked" })
 	public static <T> T cast(Object obj) {
 		return (T) obj;

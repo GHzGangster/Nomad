@@ -6,13 +6,13 @@ import org.apache.logging.log4j.Logger;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.NomadLobby;
-import savemgo.nomad.helper.Accounts;
 import savemgo.nomad.helper.Characters;
 import savemgo.nomad.helper.Chat;
 import savemgo.nomad.helper.Games;
 import savemgo.nomad.helper.Hosts;
 import savemgo.nomad.helper.Hub;
 import savemgo.nomad.helper.Mail;
+import savemgo.nomad.helper.Users;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 
@@ -42,7 +42,7 @@ public class GameLobby extends NomadLobby {
 
 		/** Accounts */
 		case 0x3003:
-			Accounts.checkSession(ctx, in, getId(), true);
+			Users.checkSession(ctx, in, getId(), true);
 			break;
 
 		/** Characters */
@@ -61,21 +61,21 @@ public class GameLobby extends NomadLobby {
 		case 0x4102:
 			Characters.getPersonalStats(ctx, in);
 			break;
-			
+
 		case 0x4110:
 			// saveoptiondata
 			Characters.updateGameplayOptions(ctx, in);
 			break;
-	
+
 		case 0x4112:
 			// savefiltersetting
 			Characters.updateUiSettings(ctx, in);
 			break;
-			
+
 		case 0x4114:
 			Characters.updateChatMacros(ctx, in);
 			break;
-			
+
 		case 0x4130:
 			Characters.updatePersonalInfo(ctx, in);
 			break;
@@ -91,35 +91,35 @@ public class GameLobby extends NomadLobby {
 		case 0x4220:
 			Characters.getCharacterOverview(ctx, in);
 			break;
-			
+
 		case 0x4500:
 			Characters.addFriendsBlocked(ctx, in);
 			break;
-			
+
 		case 0x4510:
 			Characters.removeFriendsBlocked(ctx, in);
 			break;
-			
+
 		case 0x4580:
 			Characters.getFriendsBlockedList(ctx, in);
 			break;
-		
+
 		case 0x4600:
 			Characters.search(ctx, in);
 			break;
-			
+
 		case 0x4680:
 			Characters.getMatchHistory(ctx, in);
 			break;
-		
+
 		case 0x4684:
 			Characters.getOfficialGameHistory(ctx, in);
 			break;
-		
+
 		case 0x4700:
 			Characters.updateConnectionInfo(ctx, in);
 			break;
-			
+
 		/** Mail */
 		case 0x4820:
 			Mail.getMail(ctx, in);
@@ -137,7 +137,7 @@ public class GameLobby extends NomadLobby {
 		case 0x4312:
 			Games.getDetailsFile(ctx, in, getId());
 			break;
-			
+
 		case 0x4320:
 			Games.joinHostFile(ctx, in);
 			break;
@@ -145,7 +145,7 @@ public class GameLobby extends NomadLobby {
 		case 0x4322:
 			Games.joinFailed(ctx, in);
 			break;
-			
+
 		/** Host */
 		case 0x4304:
 			Hosts.getSettings(ctx, getSubtype());
@@ -158,15 +158,15 @@ public class GameLobby extends NomadLobby {
 		case 0x4316:
 			Hosts.createGame(ctx, getId());
 			break;
-			
+
 		case 0x4340:
 			Hosts.playerConnected(ctx, in);
 			break;
-			
+
 		case 0x4342:
 			Hosts.playerDisconnected(ctx, in);
 			break;
-			
+
 		case 0x4344:
 			Hosts.playerChangedTeam(ctx, in);
 			break;
@@ -175,21 +175,21 @@ public class GameLobby extends NomadLobby {
 			// Player Kicked
 			logger.error("Player Kicked not implemented.");
 			break;
-			
+
 		case 0x4380:
 			Hosts.endGame(ctx);
 			break;
-			
+
 		case 0x4390:
 			// Stats
 			Packets.write(ctx, 0x4391, 0);
 			break;
-			
+
 		case 0x4394:
 			// updategameenv
 			logger.error("Update Game Environment not implemented.");
 			break;
-			
+
 		case 0x4392:
 			Hosts.setGame(ctx, in);
 			break;
@@ -203,23 +203,23 @@ public class GameLobby extends NomadLobby {
 			// Unknown, end of round, stats?
 			Packets.write(ctx, 0x43a3, 0);
 			break;
-			
+
 		case 0x43c0:
 			// At start of hosted Training game, after Team join
 			// Perhaps in-game information update?
 			Packets.write(ctx, 0x43c1);
 			break;
-			
+
 		case 0x43ca:
 			// Start Round
 			Packets.write(ctx, 0x43cb, 0);
 			break;
-			
+
 		/** Players */
 		case 0x4400:
 			Chat.onMessage(ctx, in);
 			break;
-			
+
 		case 0x4440:
 			// Set Team
 			Packets.write(ctx, 0x4441, 0);
@@ -229,11 +229,11 @@ public class GameLobby extends NomadLobby {
 		case 0x4150:
 			Hub.onLobbyDisconnect(ctx, in);
 			break;
-			
+
 		case 0x43d0:
 			Hub.onTrainingConnect(ctx, in);
 			break;
-			
+
 		case 0x4900:
 			Hub.getGameLobbyInfo(ctx);
 			break;
@@ -261,10 +261,10 @@ public class GameLobby extends NomadLobby {
 
 		return true;
 	}
-	
+
 	@Override
 	public void onChannelInactive(ChannelHandlerContext ctx) {
-		Accounts.onLobbyDisconnected(ctx, getId());
+		Users.onLobbyDisconnected(ctx, getId());
 	}
 
 }

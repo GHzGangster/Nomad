@@ -9,7 +9,9 @@ import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
 import javax.persistence.OneToMany;
+import javax.persistence.OneToOne;
 import javax.persistence.Table;
 
 @Entity
@@ -21,7 +23,12 @@ public class Character {
 	@Column(nullable = true, unique = true)
 	private Integer id;
 
-	private Integer user;
+	@Column(name = "user", nullable = true, insertable = false, updatable = false)
+	private Integer userId;
+
+	@JoinColumn(name = "user")
+	@OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+	private User user;
 
 	@Column(length = 16, nullable = false)
 	private String name;
@@ -44,7 +51,19 @@ public class Character {
 	private Integer lobby = 0;
 
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
-	private List<CharacterAppearance> appearances;
+	private List<CharacterAppearance> appearance;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterBlocked> blocked;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterChatMacro> chatMacros;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterFriend> friends;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterSkills> skills;
 
 	// OneToOne isn't working lazily, use OneToMany for now
 	// @JoinColumn(name = "id")
@@ -65,12 +84,8 @@ public class Character {
 		this.id = id;
 	}
 
-	public Integer getUser() {
-		return user;
-	}
-
 	public void setUser(Integer user) {
-		this.user = user;
+		this.userId = user;
 	}
 
 	public String getName() {
@@ -137,20 +152,60 @@ public class Character {
 		this.lobby = lobby;
 	}
 
-	public List<CharacterAppearance> getAppearances() {
-		return appearances;
+	public List<CharacterAppearance> getAppearance() {
+		return appearance;
 	}
 
-	public void setAppearances(List<CharacterAppearance> appearances) {
-		this.appearances = appearances;
+	public void setAppearance(List<CharacterAppearance> appearance) {
+		this.appearance = appearance;
 	}
 
-	// public CharacterAppearance getAppearance() {
-	// return appearance;
-	// }
-	//
-	// public void setAppearance(CharacterAppearance appearance) {
-	// this.appearance = appearance;
-	// }
+	public Integer getUserId() {
+		return userId;
+	}
 
+	public User getUser() {
+		return user;
+	}
+
+	public void setUser(User user) {
+		this.user = user;
+	}
+
+	public List<CharacterFriend> getFriends() {
+		return friends;
+	}
+
+	public void setFriends(List<CharacterFriend> friends) {
+		this.friends = friends;
+	}
+
+	public void setUserId(Integer userId) {
+		this.userId = userId;
+	}
+
+	public List<CharacterBlocked> getBlocked() {
+		return blocked;
+	}
+
+	public void setBlocked(List<CharacterBlocked> blocked) {
+		this.blocked = blocked;
+	}
+
+	public List<CharacterChatMacro> getChatMacros() {
+		return chatMacros;
+	}
+
+	public void setChatMacros(List<CharacterChatMacro> chatMacros) {
+		this.chatMacros = chatMacros;
+	}
+
+	public List<CharacterSkills> getSkills() {
+		return skills;
+	}
+
+	public void setSkills(List<CharacterSkills> skills) {
+		this.skills = skills;
+	}
+	
 }

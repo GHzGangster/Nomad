@@ -1,23 +1,17 @@
 package savemgo.nomad.helper;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.persistence.criteria.CriteriaBuilder;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hibernate.MultiIdentifierLoadAccess;
+import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.query.Query;
 
-import com.google.gson.JsonObject;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.crypto.Crypto;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
@@ -28,9 +22,9 @@ import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
 
-public class Accounts {
+public class Users {
 
-	private static final Logger logger = LogManager.getLogger(Accounts.class);
+	private static final Logger logger = LogManager.getLogger(Users.class);
 
 	private static final byte[] XOR_SESSION_ID = new byte[] { (byte) 0x35, (byte) 0xd5, (byte) 0xc3, (byte) 0x8e,
 			(byte) 0xd0, (byte) 0x11, (byte) 0x0e, (byte) 0xa8 };
@@ -77,7 +71,7 @@ public class Accounts {
 				return false;
 			}
 
-			boolean okay = isCharaId ? id == user.getCharacter() : id == user.getId();
+			boolean okay = isCharaId ? id == user.getCurrentCharacterId() : id == user.getId();
 			if (!okay) {
 				logger.error("Error while checking session: Bad id.");
 				Packets.write(ctx, 0x3004, 1);
@@ -92,7 +86,7 @@ public class Accounts {
 			Packets.write(ctx, 0x3004, 0);
 		} catch (Exception e) {
 			logger.error("Exception while checking session.", e);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x3004, 1);
 			return false;
 		}
@@ -113,9 +107,9 @@ public class Accounts {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<Character> query = session.createQuery(
-					"from Character as c inner join fetch c.appearances where user=:user", Character.class);
-			query.setParameter("user", user.getId());
+			Query<Character> query = session
+					.createQuery("from Character as c inner join fetch c.appearance where user=:user", Character.class);
+			query.setParameter("user", user);
 			List<Character> characters = query.list();
 
 			session.getTransaction().commit();
@@ -128,7 +122,7 @@ public class Accounts {
 
 			for (int i = 0; i < numCharacters; i++) {
 				Character chara = characters.get(i);
-				CharacterAppearance app = chara.getAppearances().get(0);
+				CharacterAppearance app = chara.getAppearance().get(0);
 
 				if (i == 0) {
 					Util.writeString(chara.getName(), 16, bo);
@@ -161,8 +155,7 @@ public class Accounts {
 			Packets.write(ctx, 0x3049, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting character list.", e);
-			DB.rollback(session);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
 			Packets.writeError(ctx, 0x3049, 1);
 		}
@@ -178,7 +171,7 @@ public class Accounts {
 				Packets.writeError(ctx, 0x3102, 2);
 				return;
 			}
-			
+
 			ByteBuf bi = in.getPayload();
 
 			String name = Util.readString(bi, 16);
@@ -213,9 +206,9 @@ public class Accounts {
 			Character character = new Character();
 			character.setName(name);
 			character.setUser(user.getId());
-			
+
 			CharacterAppearance appearance = new CharacterAppearance();
-			character.setAppearances(Arrays.asList(appearance));
+			character.setAppearance(Arrays.asList(appearance));
 			appearance.setCharacter(character);
 			appearance.setGender(gender);
 			appearance.setFace(face);
@@ -234,29 +227,28 @@ public class Accounts {
 			appearance.setHands(hands);
 			appearance.setHandsColor(handsColor);
 			appearance.setFeet(feet);
-			appearance.setFeetColor(feetColor);;
+			appearance.setFeetColor(feetColor);
 			appearance.setAccessory1(accessory1);
 			appearance.setAccessory1Color(accessory1Color);
 			appearance.setAccessory2(accessory2);
 			appearance.setAccessory2Color(accessory2Color);
 			appearance.setFacePaint(facePaint);
-			
+
 			session = DB.getSession();
 			session.beginTransaction();
-			
+
 			session.save(character);
-			
+
 			session.getTransaction().commit();
 			DB.closeSession(session);
-			
+
 			bo = ctx.alloc().directBuffer(8);
 			bo.writeInt(0).writeInt(character.getId());
 
 			Packets.write(ctx, 0x3102, bo);
 		} catch (Exception e) {
 			logger.error("Exception while creating character.", e);
-			DB.rollback(session);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Util.safeRelease(bo);
 			Packets.writeError(ctx, 0x3102, 1);
 		}
@@ -279,7 +271,7 @@ public class Accounts {
 			session.beginTransaction();
 
 			Query<Character> query = session.createQuery("from Character where user=:user", Character.class);
-			query.setParameter("user", user.getId());
+			query.setParameter("user", user);
 			List<Character> characters = query.list();
 
 			int numCharacters = characters.size();
@@ -288,7 +280,7 @@ public class Accounts {
 			}
 
 			Character character = characters.get(index);
-			user.setCharacter(character.getId());
+			user.setCurrentCharacter(character);
 
 			session.update(user);
 
@@ -298,52 +290,57 @@ public class Accounts {
 			Packets.write(ctx, 0x3104, 0);
 		} catch (Exception e) {
 			logger.error("Exception while selecting character.", e);
-			DB.rollback(session);
-			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x3104, 1);
 		}
 	}
 
 	public static void deleteCharacter(ChannelHandlerContext ctx, Packet in) {
-		Session session = null;
+//		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			int index = bi.readByte();
 
-			session = DB.getSession();
-			session.beginTransaction();
-			
-			
-			
-			session.getTransaction().commit();
-			DB.closeSession(session);
+//			session = DB.getSession();
+//			session.beginTransaction();
+//
+//			session.getTransaction().commit();
+//			DB.closeSession(session);
 
 			Packets.write(ctx, 0x3106, 0);
 		} catch (Exception e) {
 			logger.error("Exception while deleting character.", e);
+//			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x3106, 1);
 		}
 	}
 
 	public static boolean onLobbyConnected(ChannelHandlerContext ctx, int lobbyId, User user) {
-//		Session session = null;
+		Session session = null;
 		try {
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.saveOrUpdate(user);
+
+			if (user.getCurrentCharacterId() != null) {
+				Character character = user.getCurrentCharacter();
+				Hibernate.initialize(character);
+				Hibernate.initialize(character.getAppearance());
+				Hibernate.initialize(character.getBlocked());
+				Hibernate.initialize(character.getFriends());
+			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
 			if (!NUsers.initialize(ctx.channel(), user)) {
 				logger.error("Failed to initialize player during lobby connection.");
 				return false;
 			}
-			
-//			session = DB.getSession();
-//			session.beginTransaction();
-//			
-//			
-//			
-//			session.getTransaction().commit();
-//			DB.closeSession(session);
 		} catch (Exception e) {
 			logger.error("Exception while handling lobby connection.", e);
-//			DB.rollback(session);
-//			DB.closeSession(session);
+			DB.rollbackAndClose(session);
 		}
 		return true;
 	}

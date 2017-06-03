@@ -27,7 +27,7 @@ public class Hosts {
 		ByteBuf bo = null;
 		try {
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("type", lobbySubtype);
 
 			JsonObject response = Campbell.instance().getResponse("hosts", "getHostSettings", data);
@@ -828,7 +828,7 @@ public class Hosts {
 			race.addProperty("extraTime", raceExtraTime);
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("type", lobbySubtype);
 			data.add("settings", settings);
 
@@ -849,10 +849,10 @@ public class Hosts {
 	public static void createGame(ChannelHandlerContext ctx, int lobbyId) {
 		ByteBuf bo = null;
 		try {
-			int chara = NUsers.getCharacter(ctx);
+			int chara = 0;
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("lobby", lobbyId);
 
 			JsonObject response = Campbell.instance().getResponse("hosts", "createGame", data);
@@ -867,13 +867,13 @@ public class Hosts {
 			HashMap<String, Object> settings = new HashMap<>();
 			settings.put("name", "Game " + id);
 
-			if (NGames.initialize(id, chara, settings) == null) {
-				logger.error("Failed to initialize game instance.");
-				Packets.writeError(ctx, 0x4317, 3);
-				return;
-			}
+//			if (NGames.initialize(id, chara, settings) == null) {
+//				logger.error("Failed to initialize game instance.");
+//				Packets.writeError(ctx, 0x4317, 3);
+//				return;
+//			}
 
-			NUsers.setGame(ctx, id);
+//			NUsers.setGame(ctx, id);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
@@ -909,10 +909,10 @@ public class Hosts {
 	public static void playerConnected(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
 		try {
-			int gameId = NUsers.getGame(ctx);
+			int gameId = 0;
 
-			int chara = NUsers.getId(ctx);
-			int host = NGames.getHost(gameId);
+			int chara = 0;
+			int host = 0;
 			if (chara != host) {
 				logger.error("Error while handling player connected: Not the host.");
 				Packets.writeError(ctx, 0x4341, 3);
@@ -922,7 +922,7 @@ public class Hosts {
 			ByteBuf bi = in.getPayload();
 			int targetId = bi.readInt();
 
-			ConcurrentMap<String, Object> target = NUsers.getByCharacter(targetId);
+			ConcurrentMap<String, Object> target = null;
 			int gameJoining = (Integer) target.get("gameJoining");
 			
 			if (gameJoining != gameId) {
@@ -965,7 +965,7 @@ public class Hosts {
 			int game = bi.readByte();
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("game", game);
 
 			JsonObject response = Campbell.instance().getResponse("hosts", "setGame", data);
@@ -984,10 +984,10 @@ public class Hosts {
 
 	public static void endGame(ChannelHandlerContext ctx) {
 		try {
-			int gameId = NUsers.getGame(ctx);
+			int gameId = 0;
 
-			int chara = NUsers.getId(ctx);
-			int host = NGames.getHost(gameId);
+			int chara = 0;
+			int host = 0;
 			if (chara != host) {
 				logger.error("Error while ending game: Not the host.");
 				Packets.writeError(ctx, 0x4381, 3);
@@ -995,7 +995,7 @@ public class Hosts {
 			}
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("game", gameId);
 
 			JsonObject response = Campbell.instance().getResponse("hosts", "endGame", data);
@@ -1005,8 +1005,8 @@ public class Hosts {
 				return;
 			}
 
-			NUsers.setGame(ctx, 0);
-			NGames.finalize(gameId);
+//			NUsers.setGame(ctx, 0);
+//			NGames.finalize(gameId);
 
 			Packets.write(ctx, 0x4381, 0);
 		} catch (Exception e) {

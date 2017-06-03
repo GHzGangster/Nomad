@@ -1,12 +1,18 @@
 package savemgo.nomad.entity;
 
 import java.time.Instant;
+import java.util.List;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Transient;
 
@@ -17,7 +23,7 @@ public class User {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(nullable = true, unique = true)
-	private int id;
+	private Integer id;
 
 	@Column(length = 15, nullable = false)
 	private String username;
@@ -32,10 +38,10 @@ public class User {
 	private String password;
 
 	@Column(nullable = false)
-	private int activated;
+	private Integer activated;
 
 	@Column(nullable = false)
-	private int role = 0;
+	private Integer role = 0;
 
 	@Column(name = "banned_until", nullable = true)
 	private Integer bannedUntil;
@@ -44,10 +50,17 @@ public class User {
 	private String session;
 
 	@Column(name = "mgo2_slots", nullable = false)
-	private int slots = 3;
+	private Integer slots = 3;
 
-	@Column(name = "mgo2_chara", nullable = true)
-	private Integer character;
+	@Column(name = "mgo2_chara", nullable = true, updatable = false, insertable = false)
+	private Integer currentCharacterId;
+
+	@JoinColumn(name = "mgo2_chara")
+	@ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = true)
+	private Character currentCharacter;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "user")
+	private List<Character> characters;
 
 	@Transient
 	private int game = 0;
@@ -59,22 +72,6 @@ public class User {
 
 	}
 
-	public int getGame() {
-		return game;
-	}
-
-	public void setGame(int game) {
-		this.game = game;
-	}
-
-	public int getGameJoining() {
-		return gameJoining;
-	}
-
-	public void setGameJoining(int gameJoining) {
-		this.gameJoining = gameJoining;
-	}
-
 	public boolean isBanned() {
 		if (bannedUntil > 0) {
 			return bannedUntil > Instant.now().getEpochSecond();
@@ -82,11 +79,11 @@ public class User {
 		return false;
 	}
 
-	public int getId() {
+	public Integer getId() {
 		return id;
 	}
 
-	public void setId(int id) {
+	public void setId(Integer id) {
 		this.id = id;
 	}
 
@@ -122,19 +119,19 @@ public class User {
 		this.password = password;
 	}
 
-	public int getActivated() {
+	public Integer getActivated() {
 		return activated;
 	}
 
-	public void setActivated(int activated) {
+	public void setActivated(Integer activated) {
 		this.activated = activated;
 	}
 
-	public int getRole() {
+	public Integer getRole() {
 		return role;
 	}
 
-	public void setRole(int role) {
+	public void setRole(Integer role) {
 		this.role = role;
 	}
 
@@ -154,20 +151,52 @@ public class User {
 		this.session = session;
 	}
 
-	public int getSlots() {
+	public Integer getSlots() {
 		return slots;
 	}
 
-	public void setSlots(int slots) {
+	public void setSlots(Integer slots) {
 		this.slots = slots;
 	}
 
-	public Integer getCharacter() {
-		return character;
+	public Integer getCurrentCharacterId() {
+		return currentCharacterId;
 	}
 
-	public void setCharacter(Integer chara) {
-		this.character = chara;
+	public void setCurrentCharacterId(Integer currentCharacterId) {
+		this.currentCharacterId = currentCharacterId;
+	}
+
+	public Character getCurrentCharacter() {
+		return currentCharacter;
+	}
+
+	public void setCurrentCharacter(Character currentCharacter) {
+		this.currentCharacter = currentCharacter;
+	}
+
+	public List<Character> getCharacters() {
+		return characters;
+	}
+
+	public void setCharacters(List<Character> characters) {
+		this.characters = characters;
+	}
+
+	public int getGame() {
+		return game;
+	}
+
+	public void setGame(int game) {
+		this.game = game;
+	}
+
+	public int getGameJoining() {
+		return gameJoining;
+	}
+
+	public void setGameJoining(int gameJoining) {
+		this.gameJoining = gameJoining;
 	}
 
 }

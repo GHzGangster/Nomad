@@ -6,7 +6,7 @@ import org.apache.logging.log4j.Logger;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.NomadLobby;
-import savemgo.nomad.helper.Accounts;
+import savemgo.nomad.helper.Users;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 
@@ -27,7 +27,7 @@ public class AccountLobby extends NomadLobby {
 
 		/** Account */
 		case 0x3003:
-			Accounts.checkSession(ctx, in, getId(), false);
+			Users.checkSession(ctx, in, getId(), false);
 			break;
 
 		case 0x3042:
@@ -36,19 +36,19 @@ public class AccountLobby extends NomadLobby {
 			break;
 
 		case 0x3048:
-			Accounts.getCharacterList(ctx);
+			Users.getCharacterList(ctx);
 			break;
 
 		case 0x3101:
-			Accounts.createCharacter(ctx, in);
+			Users.createCharacter(ctx, in);
 			break;
 
 		case 0x3103:
-			Accounts.selectCharacter(ctx, in);
+			Users.selectCharacter(ctx, in);
 			break;
 
 		case 0x3105:
-			Accounts.deleteCharacter(ctx, in);
+			Users.deleteCharacter(ctx, in);
 			break;
 
 		// case 0x3107:
@@ -65,7 +65,7 @@ public class AccountLobby extends NomadLobby {
 
 	@Override
 	public void onChannelInactive(ChannelHandlerContext ctx) {
-		Accounts.onLobbyDisconnected(ctx, getId());
+		Users.onLobbyDisconnected(ctx, getId());
 	}
 	
 }

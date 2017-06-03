@@ -3,11 +3,14 @@ package savemgo.nomad.helper;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.commons.codec.binary.Base64;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Session;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -16,6 +19,14 @@ import com.google.gson.JsonObject;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.campbell.Campbell;
+import savemgo.nomad.db.DB;
+import savemgo.nomad.entity.Character;
+import savemgo.nomad.entity.CharacterAppearance;
+import savemgo.nomad.entity.CharacterBlocked;
+import savemgo.nomad.entity.CharacterChatMacro;
+import savemgo.nomad.entity.CharacterFriend;
+import savemgo.nomad.entity.CharacterSkills;
+import savemgo.nomad.entity.User;
 import savemgo.nomad.instance.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
@@ -28,46 +39,40 @@ public class Characters {
 	public static void getCharacterInfo(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getCharacterInfo", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting character info: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting character info: No User.");
 				Packets.writeError(ctx, 0x4101, 2);
 				return;
 			}
 
-			int id = response.get("id").getAsInt();
-			String name = response.get("name").getAsString();
-			int exp = response.get("exp").getAsInt();
-			JsonArray friends = response.get("friends").getAsJsonArray();
-			JsonArray blocked = response.get("blocked").getAsJsonArray();
-			int time1 = response.get("time1").getAsInt();
-			int time2 = response.get("time2").getAsInt();
-			String bytes1Encoded = response.get("bytes1").getAsString();
-			String bytes2Encoded = response.get("bytes2").getAsString();
+			Character character = user.getCurrentCharacter();
 
-			byte[] bytes1 = Base64.decodeBase64(bytes1Encoded);
-			byte[] bytes2 = Base64.decodeBase64(bytes2Encoded);
+			int currentEpoch = (int) Instant.now().getEpochSecond();
+
+			byte bytes1[] = { (byte) 0x16, (byte) 0xAE, (byte) 0x03, (byte) 0x38, (byte) 0x01, (byte) 0x3E, (byte) 0x01,
+					(byte) 0x50 };
+			byte bytes2[] = { (byte) 0x00, (byte) 0x97, (byte) 0xFD, (byte) 0xAB, (byte) 0xFC, (byte) 0xFF, (byte) 0xFF,
+					(byte) 0x7B, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xCE, (byte) 0x00 };
+			int time1 = currentEpoch - 1, time2 = currentEpoch;
 
 			bo = ctx.alloc().directBuffer(0x243);
 
-			bo.writeInt(id);
-			Util.writeString(name, 16, bo);
-			bo.writeBytes(bytes1).writeInt(exp);
+			bo.writeInt(character.getId());
+			Util.writeString(character.getName(), 16, bo);
+			bo.writeBytes(bytes1).writeInt(character.getExp());
 
 			bo.writeInt(time1).writeInt(time2).writeZero(1);
 
-			for (JsonElement elem : friends) {
-				int cid = elem.getAsInt();
-				bo.writeInt(cid);
+			for (CharacterFriend friend : character.getFriends()) {
+				bo.writeInt(friend.getTargetId());
 			}
 			Util.padTo(0x129, bo);
 
-			for (JsonElement elem : blocked) {
-				int cid = elem.getAsInt();
-				bo.writeInt(cid);
+			for (CharacterBlocked blocked : character.getBlocked()) {
+				bo.writeInt(blocked.getTargetId());
 			}
 			Util.padTo(0x229, bo);
 
@@ -76,31 +81,48 @@ public class Characters {
 			Packets.write(ctx, 0x4101, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting personal info.", e);
-			Packets.writeError(ctx, 0x4101, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4101, 1);
 		}
 	}
 
+	/**
+	 * TODO: Figure out the payload in more detail, and/or just store the raw
+	 * bytes
+	 * 
+	 * @param ctx
+	 */
 	public static void getGameplayOptions(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getGameplayOptions", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting gameplay settings: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting gameplay options: No User.");
 				Packets.writeError(ctx, 0x4120, 2);
 				return;
 			}
 
-			JsonArray names = response.get("names").getAsJsonArray();
+			String gameplayOptionsJson = user.getCurrentCharacter().getGameplayOptions();
+			if (gameplayOptionsJson == null) {
+				gameplayOptionsJson = "{\"names\":[\"Attacking\",\"Defensive\",\"Communication\",\"Acknowledgements\"]}";
+			}
 
-			String bytes1Encoded = response.get("bytes1").getAsString();
-			String bytes2Encoded = response.get("bytes2").getAsString();
+			JsonObject gameplayOptions = Util.jsonDecode(gameplayOptionsJson);
 
-			byte[] bytes1 = Base64.decodeBase64(bytes1Encoded);
-			byte[] bytes2 = Base64.decodeBase64(bytes2Encoded);
+			JsonArray names = gameplayOptions.get("names").getAsJsonArray();
+
+			byte bytes1[] = { (byte) 0x01, (byte) 0x40, (byte) 0x40, (byte) 0x44, (byte) 0x04, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x22, (byte) 0x00, (byte) 0x51,
+					(byte) 0x55, (byte) 0x10, (byte) 0x02, (byte) 0x01, (byte) 0x10, (byte) 0x11, (byte) 0xB1,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x03, (byte) 0x04,
+					(byte) 0x02, (byte) 0x0A, (byte) 0x0C, (byte) 0x0D, (byte) 0x0B, (byte) 0x0E, (byte) 0x10,
+					(byte) 0x11, (byte) 0x0F, (byte) 0x05, (byte) 0x07, (byte) 0x08, (byte) 0x06 };
+			byte bytes2[] = { (byte) 0x01, (byte) 0x00, (byte) 0x10, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x10, (byte) 0x11, (byte) 0x10, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
 
 			bo = ctx.alloc().directBuffer(0x150);
 
@@ -116,23 +138,19 @@ public class Characters {
 			Packets.write(ctx, 0x4120, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting gameplay options.", e);
-			Packets.writeError(ctx, 0x4120, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4120, 1);
 		}
 	}
 
+	/**
+	 * TODO: Update information
+	 * 
+	 * @param ctx
+	 * @param in
+	 */
 	public static void updateGameplayOptions(ChannelHandlerContext ctx, Packet in) {
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-
-			JsonObject response = Campbell.instance().getResponse("characters", "updateGameplayOptions", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while updating gameplay options: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4111, 2);
-				return;
-			}
-
 			Packets.write(ctx, 0x4111, 0);
 		} catch (Exception e) {
 			logger.error("Exception while updating gameplay options.", e);
@@ -140,6 +158,12 @@ public class Characters {
 		}
 	}
 
+	/**
+	 * TODO: Update information
+	 * 
+	 * @param ctx
+	 * @param in
+	 */
 	public static void updateUiSettings(ChannelHandlerContext ctx, Packet in) {
 		try {
 			Packets.write(ctx, 0x4113, 0);
@@ -152,18 +176,14 @@ public class Characters {
 	public static void getChatMacros(ChannelHandlerContext ctx) {
 		ByteBuf[] bos = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getChatMacros", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting chat macros: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting gameplay options: No User.");
 				Packets.writeError(ctx, 0x4121, 2);
 				return;
 			}
 
-			JsonArray normal = response.get("normal").getAsJsonArray();
-			JsonArray shift = response.get("shift").getAsJsonArray();
+			List<CharacterChatMacro> macros = user.getCurrentCharacter().getChatMacros();
 
 			bos = new ByteBuf[2];
 			for (int i = 0; i < bos.length; i++) {
@@ -171,12 +191,8 @@ public class Characters {
 				bos[i].writeByte(i);
 			}
 
-			for (int i = 0; i < 12; i++) {
-				String norm = normal.get(i).getAsString();
-				Util.writeString(norm, 64, bos[0]);
-
-				String shft = shift.get(i).getAsString();
-				Util.writeString(shft, 64, bos[1]);
+			for (CharacterChatMacro macro : macros) {
+				Util.writeString(macro.getText(), 64, bos[macro.getType()]);
 			}
 
 			for (ByteBuf bo : bos) {
@@ -184,37 +200,60 @@ public class Characters {
 			}
 		} catch (Exception e) {
 			logger.error("Exception while getting chat macros.", e);
-			Packets.writeError(ctx, 0x4121, 1);
 			Util.releaseBuffers(bos);
+			Packets.writeError(ctx, 0x4121, 1);
 		}
 	}
 
 	public static void updateChatMacros(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int type = bi.readByte();
-
-			JsonArray macros = new JsonArray();
-			for (int i = 0; i < 12; i++) {
-				String text = Util.readString(bi, 64);
-				macros.add(text);
-			}
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-			data.addProperty("type", type);
-			data.add("macros", macros);
-
-			JsonObject response = Campbell.instance().getResponse("characters", "updateChatMacros", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while updating chat macros: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting updating chat macros: No User.");
 				Packets.writeError(ctx, 0x4115, 2);
 				return;
 			}
 
+			ByteBuf bi = in.getPayload();
+			final int type = bi.readByte();
+
+			Character character = user.getCurrentCharacter();
+
+			List<CharacterChatMacro> macros = character.getChatMacros();
+			if (macros == null) {
+				macros = new ArrayList<CharacterChatMacro>();
+				character.setChatMacros(macros);
+				for (int typem = 0; typem < 2; typem++) {
+					for (int index = 0; index < 12; index++) {
+						CharacterChatMacro macro = new CharacterChatMacro();
+						macro.setCharacter(character);
+						macro.setType(typem);
+						macro.setIndex(index);
+					}
+				}
+			}
+
+			for (int i = 0; i < 12; i++) {
+				final int index = i;
+				CharacterChatMacro macro = macros.stream().filter((e) -> e.getIndex() == index && e.getType() == type)
+						.findFirst().orElse(null);
+				String text = Util.readString(bi, 64);
+				macro.setText(text);
+			}
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(user);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
 			Packets.write(ctx, 0x4115, 0);
 		} catch (Exception e) {
 			logger.error("Exception while updating chat macros.", e);
+			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x4115, 1);
 		}
 	}
@@ -222,96 +261,62 @@ public class Characters {
 	public static void getPersonalInfo(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getPersonalInfo", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting personal details: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting personal details: No User.");
 				Packets.writeError(ctx, 0x4122, 2);
 				return;
 			}
 
-			int clanId = response.get("clanId").getAsInt();
-			String clanName = response.get("clanName").getAsString();
-			int time1 = response.get("time1").getAsInt();
-			JsonObject appearance = response.get("appearance").getAsJsonObject();
-			JsonArray skills = response.get("skills").getAsJsonArray();
-			String comment = response.get("comment").getAsString();
-			int rwd = response.get("rwd").getAsInt();
-			int rank = response.get("rank").getAsInt();
-			String bytes1Encoded = response.get("bytes1").getAsString();
-			String bytes3Encoded = response.get("bytes3").getAsString();
+			Character character = user.getCurrentCharacter();
+			CharacterAppearance appearance = character.getAppearance().get(0);
+			CharacterSkills skills = character.getSkills().get(0);
 
-			int gender = appearance.get("gender").getAsInt();
-			int face = appearance.get("face").getAsInt();
-			int voice = appearance.get("voice").getAsInt();
-			int pitch = appearance.get("pitch").getAsInt();
-			int head = appearance.get("head").getAsInt();
-			int headColor = appearance.get("headColor").getAsInt();
-			int upper = appearance.get("upper").getAsInt();
-			int upperColor = appearance.get("upperColor").getAsInt();
-			int lower = appearance.get("lower").getAsInt();
-			int lowerColor = appearance.get("lowerColor").getAsInt();
-			int chest = appearance.get("chest").getAsInt();
-			int chestColor = appearance.get("chestColor").getAsInt();
-			int waist = appearance.get("waist").getAsInt();
-			int waistColor = appearance.get("waistColor").getAsInt();
-			int hands = appearance.get("hands").getAsInt();
-			int handsColor = appearance.get("handsColor").getAsInt();
-			int feet = appearance.get("feet").getAsInt();
-			int feetColor = appearance.get("feetColor").getAsInt();
-			int accessory1 = appearance.get("accessory1").getAsInt();
-			int accessory1Color = appearance.get("accessory1Color").getAsInt();
-			int accessory2 = appearance.get("accessory2").getAsInt();
-			int accessory2Color = appearance.get("accessory2Color").getAsInt();
-			int facePaint = appearance.get("facePaint").getAsInt();
+			int clanId = 0;
+			String clanName = "";
+			int time1 = (int) Instant.now().getEpochSecond();
+			int rwd = 1738;
 
-			byte[] bytes1 = Base64.decodeBase64(bytes1Encoded);
-			byte[] bytes3 = Base64.decodeBase64(bytes3Encoded);
+			byte bytes1[] = { (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0C, (byte) 0x00, (byte) 0x01,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x00,
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01 };
+			byte bytes3[] = { (byte) 0x03, (byte) 0x00, (byte) 0xA7, (byte) 0x00, (byte) 0x0D };
 
 			bo = ctx.alloc().directBuffer(0xf5);
 
 			bo.writeInt(clanId);
 			Util.writeString(clanName, 16, bo);
 			bo.writeBytes(bytes1).writeInt(time1);
-			bo.writeByte(gender).writeByte(face).writeByte(upper).writeByte(lower).writeByte(facePaint)
-					.writeByte(upperColor).writeByte(lowerColor).writeByte(voice).writeByte(pitch).writeZero(4)
-					.writeByte(head).writeByte(chest).writeByte(hands).writeByte(waist).writeByte(feet)
-					.writeByte(accessory1).writeByte(accessory2).writeByte(headColor).writeByte(chestColor)
-					.writeByte(handsColor).writeByte(waistColor).writeByte(feetColor).writeByte(accessory1Color)
-					.writeByte(accessory2Color);
+			bo.writeByte(appearance.getGender()).writeByte(appearance.getFace()).writeByte(appearance.getUpper())
+					.writeByte(appearance.getLower()).writeByte(appearance.getFacePaint())
+					.writeByte(appearance.getUpperColor()).writeByte(appearance.getLowerColor())
+					.writeByte(appearance.getVoice()).writeByte(appearance.getPitch()).writeZero(4)
+					.writeByte(appearance.getHead()).writeByte(appearance.getChest()).writeByte(appearance.getHands())
+					.writeByte(appearance.getWaist()).writeByte(appearance.getFeet())
+					.writeByte(appearance.getAccessory1()).writeByte(appearance.getAccessory2())
+					.writeByte(appearance.getHeadColor()).writeByte(appearance.getChestColor())
+					.writeByte(appearance.getHandsColor()).writeByte(appearance.getWaistColor())
+					.writeByte(appearance.getFeetColor()).writeByte(appearance.getAccessory1Color())
+					.writeByte(appearance.getAccessory2Color());
 
-			for (int i = 0; i < 4; i++) {
-				JsonObject skill = skills.get(i).getAsJsonObject();
-				int id = skill.get("id").getAsInt();
-				bo.writeByte(id);
-			}
-			bo.writeZero(1);
+			bo.writeByte(skills.getSkill1()).writeByte(skills.getSkill2()).writeByte(skills.getSkill3())
+					.writeByte(skills.getSkill4()).writeZero(1).writeByte(skills.getLevel1())
+					.writeByte(skills.getLevel2()).writeByte(skills.getLevel3()).writeByte(skills.getLevel4())
+					.writeZero(1);
 
-			for (int i = 0; i < 4; i++) {
-				JsonObject skill = skills.get(i).getAsJsonObject();
-				int level = skill.get("level").getAsInt();
-				bo.writeByte(level);
-			}
-			bo.writeZero(1);
-
-			for (int i = 0; i < 4; i++) {
-				JsonObject skill = skills.get(i).getAsJsonObject();
-				int exp = skill.get("exp").getAsInt();
-				bo.writeInt(exp);
-			}
-			bo.writeZero(5);
+			int skillExp = 0x600000;
+			bo.writeByte(skillExp).writeByte(skillExp).writeByte(skillExp).writeByte(skillExp).writeZero(5);
 
 			bo.writeInt(rwd);
-			Util.writeString(comment, 128, bo);
-			bo.writeInt(0).writeByte(rank).writeBytes(bytes3);
+			Util.writeString(character.getComment(), 128, bo);
+			bo.writeInt(0).writeByte(character.getRank()).writeBytes(bytes3);
 
 			Packets.write(ctx, 0x4122, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting personal info.", e);
-			Packets.writeError(ctx, 0x4122, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4122, 1);
 		}
 	}
 
@@ -397,7 +402,7 @@ public class Characters {
 			skill.addProperty("level", skill4Level);
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.add("appearance", appearance);
 			data.add("skills", skills);
 			data.addProperty("comment", comment);
@@ -449,7 +454,7 @@ public class Characters {
 		ByteBuf bo = null;
 		try {
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 
 			JsonObject response = Campbell.instance().getResponse("characters", "getGear", data);
 			if (!Campbell.checkResult(response)) {
@@ -485,7 +490,7 @@ public class Characters {
 		ByteBuf bo = null;
 		try {
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 
 			JsonObject response = Campbell.instance().getResponse("characters", "getSkills", data);
 			if (!Campbell.checkResult(response)) {
@@ -519,7 +524,7 @@ public class Characters {
 		ByteBuf bo = null;
 		try {
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 
 			JsonObject response = Campbell.instance().getResponse("characters", "getSkillSets", data);
 			if (!Campbell.checkResult(response)) {
@@ -614,7 +619,7 @@ public class Characters {
 			}
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.add("skillSets", skillSets);
 
 			JsonObject response = Campbell.instance().getResponse("characters", "updateSkillSets", data);
@@ -635,7 +640,7 @@ public class Characters {
 		ByteBuf bo = null;
 		try {
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 
 			JsonObject response = Campbell.instance().getResponse("characters", "getGearSets", data);
 			if (!Campbell.checkResult(response)) {
@@ -752,7 +757,7 @@ public class Characters {
 			}
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.add("gearSets", gearSets);
 
 			JsonObject response = Campbell.instance().getResponse("characters", "updateGearSets", data);
@@ -781,7 +786,7 @@ public class Characters {
 			String publicIp = ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress().getHostAddress();
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("publicIp", publicIp);
 			data.addProperty("publicPort", publicPort);
 			data.addProperty("privateIp", privateIp);
@@ -813,7 +818,7 @@ public class Characters {
 			int type = bi.readByte();
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("type", type);
 
 			JsonObject response = Campbell.instance().getResponse("characters", "getFriendsBlockedList", data);
@@ -890,7 +895,7 @@ public class Characters {
 			int target = bi.readInt();
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("type", type);
 			data.addProperty("target", target);
 
@@ -921,7 +926,7 @@ public class Characters {
 			int target = bi.readInt();
 
 			JsonObject data = new JsonObject();
-			data.addProperty("session", NUsers.getSession(ctx));
+			data.addProperty("session", "");
 			data.addProperty("type", type);
 			data.addProperty("target", target);
 

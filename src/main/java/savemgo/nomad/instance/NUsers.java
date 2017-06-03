@@ -29,8 +29,8 @@ public class NUsers {
 		return users.search(1, (key, value) -> predicate.test(value) ? value : null);
 	}
 
-	public static User getByCharacter(int charaId) {
-		return get((e) -> (Integer) e.getCharacter() == charaId);
+	public static User getByCharacterId(int charaId) {
+		return get((e) -> (Integer) e.getCurrentCharacterId() == charaId);
 	}
 
 }

@@ -12,8 +12,6 @@ import org.apache.logging.log4j.Logger;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.instance.NChannels;
-import savemgo.nomad.instance.NGames;
-import savemgo.nomad.instance.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -36,7 +34,7 @@ public class Chat {
 	public static void onMessage(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
 		try {
-			int chara = NUsers.getCharacter(ctx);
+			int chara = 0;
 
 			ByteBuf bi = in.getPayload();
 			int flag1 = bi.readByte();
@@ -57,7 +55,7 @@ public class Chat {
 
 			if (message.startsWith("/nuser")) {
 				Supplier<String> s = () -> {
-					ConcurrentMap<String, Object> player = NUsers.get(ctx.channel());
+					ConcurrentMap<String, Object> player = null;
 					if (player == null) {
 						return "[NUser] Failed to get instance.";
 					}
@@ -66,7 +64,7 @@ public class Chat {
 					int userRole = (Integer) player.get("userRole");
 					String name = (String) player.get("charaName");
 					int game = (Integer) player.get("game");
-					
+
 					return "[NUser] User: " + user + " Role: " + userRole + " Chara: " + chara + " Name: " + name
 							+ " Game: " + game;
 				};
@@ -75,22 +73,22 @@ public class Chat {
 				mr = MessageRecipient.SELF;
 			} else if (message.startsWith("/ngame")) {
 				Supplier<String> s = () -> {
-					int gameId = NUsers.getGame(ctx);
-					
-					ConcurrentMap<String, Object> game = NGames.get(gameId);
+					int gameId = 0;
+
+					ConcurrentMap<String, Object> game = null;
 					if (game == null) {
 						return "[NGame] Failed to get instance.";
 					}
 
 					int host = (Integer) game.get("host");
-					
+
 					List<Integer> players = Util.cast(game.get("players"));
-					
+
 					String playersStr = "";
 					for (Integer player : players) {
 						playersStr += player + " ";
 					}
-					
+
 					return "[NGame] ID: " + gameId + " Host: " + host + " Players: " + playersStr;
 				};
 				s.get();
@@ -114,7 +112,7 @@ public class Chat {
 				final ByteBuf _bo = bo;
 
 				NChannels.process((ch) -> {
-					ConcurrentHashMap<String, Object> info = NUsers.get(ch);
+					ConcurrentHashMap<String, Object> info = null;
 					Integer character = (Integer) info.get("chara");
 					if (character != null && character != 0) {
 						return recipients.stream().filter(e -> e.intValue() == character.intValue()).count() > 0;
