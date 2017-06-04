@@ -21,8 +21,10 @@ import savemgo.nomad.entity.CharacterAppearance;
 import savemgo.nomad.entity.CharacterBlocked;
 import savemgo.nomad.entity.CharacterChatMacro;
 import savemgo.nomad.entity.CharacterFriend;
+import savemgo.nomad.entity.Game;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.News;
+import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
 
 public class DB {
@@ -65,8 +67,9 @@ public class DB {
 
 			configuration.addAnnotatedClass(Character.class).addAnnotatedClass(CharacterAppearance.class)
 					.addAnnotatedClass(CharacterBlocked.class).addAnnotatedClass(CharacterChatMacro.class)
-					.addAnnotatedClass(CharacterFriend.class).addAnnotatedClass(Lobby.class)
-					.addAnnotatedClass(News.class).addAnnotatedClass(User.class);
+					.addAnnotatedClass(CharacterFriend.class).addAnnotatedClass(Game.class)
+					.addAnnotatedClass(Lobby.class).addAnnotatedClass(News.class).addAnnotatedClass(Player.class)
+					.addAnnotatedClass(User.class);
 
 			ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
 					.applySettings(configuration.getProperties())

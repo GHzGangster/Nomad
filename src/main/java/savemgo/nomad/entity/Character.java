@@ -64,6 +64,9 @@ public class Character {
 
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterSkills> skills;
+	
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<ConnectionInfo> connectionInfo;
 
 	// OneToOne isn't working lazily, use OneToMany for now
 	// @JoinColumn(name = "id")
