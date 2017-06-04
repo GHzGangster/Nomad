@@ -1,6 +1,5 @@
 package savemgo.nomad.entity;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.persistence.CascadeType;
@@ -36,7 +35,7 @@ public class Game {
 
 	@JoinColumn(name = "lobby")
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
-	private List<Lobby> lobby;
+	private Lobby lobby;
 
 	@Column(length = 16, nullable = false)
 	private String name;
@@ -69,7 +68,7 @@ public class Game {
 	private String rules;
 
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
-	private List<Integer> players;
+	private List<Player> players;
 
 	public Game() {
 
@@ -187,20 +186,20 @@ public class Game {
 		this.host = host;
 	}
 
-	public List<Lobby> getLobby() {
+	public Lobby getLobby() {
 		return lobby;
 	}
 
-	public void setLobby(List<Lobby> lobby) {
+	public void setLobby(Lobby lobby) {
 		this.lobby = lobby;
 	}
 
-	public List<Integer> getPlayers() {
+	public List<Player> getPlayers() {
 		return players;
 	}
 
-	public void setPlayers(List<Integer> players) {
+	public void setPlayers(List<Player> players) {
 		this.players = players;
 	}
-	
+
 }

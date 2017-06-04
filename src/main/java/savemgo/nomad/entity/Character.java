@@ -60,16 +60,22 @@ public class Character {
 	private List<CharacterChatMacro> chatMacros;
 
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<ConnectionInfo> connectionInfo;
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterFriend> friends;
+	
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterHostSettings> hostSettings;
 
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterEquippedSkills> skills;
-	
+
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterSetGear> setsGear;
+
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterSetSkills> setsSkills;
-	
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
-	private List<ConnectionInfo> connectionInfo;
 
 	// OneToOne isn't working lazily, use OneToMany for now
 	// @JoinColumn(name = "id")
@@ -220,6 +226,30 @@ public class Character {
 
 	public void setSetsSkills(List<CharacterSetSkills> setsSkills) {
 		this.setsSkills = setsSkills;
+	}
+
+	public List<ConnectionInfo> getConnectionInfo() {
+		return connectionInfo;
+	}
+
+	public void setConnectionInfo(List<ConnectionInfo> connectionInfo) {
+		this.connectionInfo = connectionInfo;
+	}
+
+	public List<CharacterSetGear> getSetsGear() {
+		return setsGear;
+	}
+
+	public void setSetsGear(List<CharacterSetGear> setsGear) {
+		this.setsGear = setsGear;
+	}
+
+	public List<CharacterHostSettings> getHostSettings() {
+		return hostSettings;
+	}
+
+	public void setHostSettings(List<CharacterHostSettings> hostSettings) {
+		this.hostSettings = hostSettings;
 	}
 	
 }

@@ -22,7 +22,10 @@ import savemgo.nomad.entity.CharacterBlocked;
 import savemgo.nomad.entity.CharacterChatMacro;
 import savemgo.nomad.entity.CharacterEquippedSkills;
 import savemgo.nomad.entity.CharacterFriend;
+import savemgo.nomad.entity.CharacterHostSettings;
+import savemgo.nomad.entity.CharacterSetGear;
 import savemgo.nomad.entity.CharacterSetSkills;
+import savemgo.nomad.entity.ConnectionInfo;
 import savemgo.nomad.entity.Game;
 //github.com/GHzGangster/Nomad.git
 import savemgo.nomad.entity.Lobby;
@@ -71,8 +74,10 @@ public class DB {
 			configuration.addAnnotatedClass(Character.class).addAnnotatedClass(CharacterAppearance.class)
 					.addAnnotatedClass(CharacterBlocked.class).addAnnotatedClass(CharacterChatMacro.class)
 					.addAnnotatedClass(CharacterEquippedSkills.class).addAnnotatedClass(CharacterFriend.class)
-					.addAnnotatedClass(CharacterSetSkills.class).addAnnotatedClass(Game.class).addAnnotatedClass(Lobby.class)
-					.addAnnotatedClass(News.class).addAnnotatedClass(Player.class).addAnnotatedClass(User.class);
+					.addAnnotatedClass(CharacterHostSettings.class).addAnnotatedClass(CharacterSetGear.class)
+					.addAnnotatedClass(CharacterSetSkills.class).addAnnotatedClass(ConnectionInfo.class)
+					.addAnnotatedClass(Game.class).addAnnotatedClass(Lobby.class).addAnnotatedClass(News.class)
+					.addAnnotatedClass(Player.class).addAnnotatedClass(User.class);
 
 			ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
 					.applySettings(configuration.getProperties())

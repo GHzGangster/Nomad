@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
+import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Player;
 
 public class NGames {
 
@@ -30,22 +32,22 @@ public class NGames {
 		return games.search(1, (key, value) -> (key == gameId) ? value : null);
 	}
 
-	public static int getHost(int gameId) {
+	public static Character getHost(int gameId) {
 		Game game = get(gameId);
 		if (game != null) {
 			return game.getHost();
 		}
-		return 0;
+		return null;
 	}
 
-	public static void setHost(int gameId, int hostId) {
+	public static void setHost(int gameId, Character host) {
 		Game game = get(gameId);
 		if (game != null) {
-			game.setHost(hostId);
+			game.setHost(host);
 		}
 	}
 
-	public static List<Integer> getPlayers(int gameId) {
+	public static List<Player> getPlayers(int gameId) {
 		Game game = get(gameId);
 		if (game != null) {
 			return game.getPlayers();

@@ -296,21 +296,21 @@ public class Users {
 	}
 
 	public static void deleteCharacter(ChannelHandlerContext ctx, Packet in) {
-//		Session session = null;
+		// Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			int index = bi.readByte();
 
-//			session = DB.getSession();
-//			session.beginTransaction();
-//
-//			session.getTransaction().commit();
-//			DB.closeSession(session);
+			// session = DB.getSession();
+			// session.beginTransaction();
+			//
+			// session.getTransaction().commit();
+			// DB.closeSession(session);
 
 			Packets.write(ctx, 0x3106, 0);
 		} catch (Exception e) {
 			logger.error("Exception while deleting character.", e);
-//			DB.rollbackAndClose(session);
+			// DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x3106, 1);
 		}
 	}
@@ -321,7 +321,7 @@ public class Users {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			session.saveOrUpdate(user);
+			session.update(user);
 
 			if (user.getCurrentCharacterId() != null) {
 				Character character = user.getCurrentCharacter();
@@ -329,7 +329,10 @@ public class Users {
 				Hibernate.initialize(character.getAppearance());
 				Hibernate.initialize(character.getBlocked());
 				Hibernate.initialize(character.getChatMacros());
+				Hibernate.initialize(character.getConnectionInfo());
 				Hibernate.initialize(character.getFriends());
+				Hibernate.initialize(character.getHostSettings());
+				Hibernate.initialize(character.getSetsGear());
 				Hibernate.initialize(character.getSetsSkills());
 				Hibernate.initialize(character.getSkills());
 			}
