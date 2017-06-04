@@ -24,8 +24,9 @@ import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterAppearance;
 import savemgo.nomad.entity.CharacterBlocked;
 import savemgo.nomad.entity.CharacterChatMacro;
+import savemgo.nomad.entity.CharacterEquippedSkills;
 import savemgo.nomad.entity.CharacterFriend;
-import savemgo.nomad.entity.CharacterSkills;
+import savemgo.nomad.entity.CharacterSetSkills;
 import savemgo.nomad.entity.User;
 import savemgo.nomad.instance.NUsers;
 import savemgo.nomad.packet.Packet;
@@ -270,7 +271,7 @@ public class Characters {
 
 			Character character = user.getCurrentCharacter();
 			CharacterAppearance appearance = character.getAppearance().get(0);
-			CharacterSkills skills = character.getSkills().get(0);
+			CharacterEquippedSkills skills = character.getSkills().get(0);
 
 			int clanId = 0;
 			String clanName = "";
@@ -453,27 +454,29 @@ public class Characters {
 	public static void getGear(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getGear", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting gear: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting gear: No User.");
 				Packets.writeError(ctx, 0x4124, 2);
 				return;
 			}
 
-			JsonArray gear = response.get("gear").getAsJsonArray();
+			int[] gearItems = new int[] { 0x04, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x16, 0x1C, 0x1D,
+					0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2E, 0x2F,
+					0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x44, 0x45,
+					0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x56, 0x57,
+					0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x66, 0x67, 0x68,
+					0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x80,
+					0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+					0xA0, 0xA1, 0xA2, 0xB0, 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4 };
 
-			bo = ctx.alloc().directBuffer(0x24 + gear.size() * 0x5);
+			bo = ctx.alloc().directBuffer(0x24 + gearItems.length * 0x5);
 
-			bo.writeInt(gear.size());
+			bo.writeInt(gearItems.length);
 
-			for (JsonElement elem : gear) {
-				JsonObject item = elem.getAsJsonObject();
-				int id = item.get("id").getAsInt();
-				int colors = item.get("colors").getAsInt();
-				bo.writeByte(id).writeInt(colors);
+			for (int gearItem : gearItems) {
+				int colors = 0xffffffff;
+				bo.writeByte(gearItem).writeInt(colors);
 			}
 
 			bo.writeBytes(GEAR_TERMINATOR);
@@ -481,91 +484,81 @@ public class Characters {
 			Packets.write(ctx, 0x4124, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting gear.", e);
-			Packets.writeError(ctx, 0x4124, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4124, 1);
 		}
 	}
 
 	public static void getSkills(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getSkills", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting skills: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting skills: No User.");
 				Packets.writeError(ctx, 0x4125, 2);
 				return;
 			}
 
-			JsonArray skills = response.get("skills").getAsJsonArray();
+			int numSkills = 25;
 
-			bo = ctx.alloc().directBuffer(0x4 + skills.size() * 0x4);
+			bo = ctx.alloc().directBuffer(0x4 + numSkills * 0x4);
 
-			bo.writeInt(skills.size());
+			bo.writeInt(numSkills);
 
-			for (JsonElement elem : skills) {
-				JsonObject skill = elem.getAsJsonObject();
-				int id = skill.get("id").getAsInt();
-				int exp = skill.get("exp").getAsInt();
-				bo.writeByte(id).writeShort(exp).writeZero(1);
+			for (int i = 1; i <= numSkills; i++) {
+				int exp;
+				if (i == 17 || i == 20 || i == 22) {
+					exp = 0x2000;
+				} else {
+					exp = 0x6000;
+				}
+				bo.writeByte(i).writeShort(exp).writeZero(1);
 			}
 
 			Packets.write(ctx, 0x4125, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting skills.", e);
-			Packets.writeError(ctx, 0x4125, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4125, 1);
 		}
 	}
 
 	public static void getSkillSets(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getSkillSets", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting skill presets: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting skill sets: No User.");
 				Packets.writeError(ctx, 0x4140, 2);
 				return;
 			}
 
-			JsonArray presets = response.get("presets").getAsJsonArray();
-
-			bo = ctx.alloc().directBuffer(0x4d * presets.size());
-
-			for (JsonElement elem : presets) {
-				JsonObject preset = elem.getAsJsonObject();
-				String name = preset.get("name").getAsString();
-				int modes = preset.get("modes").getAsInt();
-				JsonArray skills = preset.get("skills").getAsJsonArray();
-
-				bo.writeInt(modes);
-
-				for (int i = 0; i < 4; i++) {
-					JsonObject skill = skills.get(i).getAsJsonObject();
-					int id = skill.get("id").getAsInt();
-					bo.writeByte(id);
+			Character character = user.getCurrentCharacter();
+			List<CharacterSetSkills> sets = character.getSetsSkills();
+			if (sets == null) {
+				sets = new ArrayList<CharacterSetSkills>();
+				for (int index = 0; index < 3; index++) {
+					CharacterSetSkills set = new CharacterSetSkills();
+					set.setCharacter(character);
+					set.setIndex(index);
 				}
-				bo.writeZero(1);
-				for (int i = 0; i < 4; i++) {
-					JsonObject skill = skills.get(i).getAsJsonObject();
-					int level = skill.get("level").getAsInt();
-					bo.writeByte(level);
-				}
-				bo.writeZero(1);
+				character.setSetsSkills(sets);
+			}
 
-				Util.writeString(name, 63, bo, StandardCharsets.UTF_8);
+			bo = ctx.alloc().directBuffer(0x4d * sets.size());
+
+			for (CharacterSetSkills set : sets) {
+				bo.writeInt(set.getModes()).writeByte(set.getSkill1()).writeByte(set.getSkill2())
+						.writeByte(set.getSkill3()).writeByte(set.getSkill4()).writeZero(1).writeByte(set.getLevel1())
+						.writeByte(set.getLevel2()).writeByte(set.getLevel3()).writeByte(set.getLevel4()).writeZero(1);
+				Util.writeString(set.getName(), 63, bo, StandardCharsets.UTF_8);
 			}
 
 			Packets.write(ctx, 0x4140, bo);
 		} catch (Exception e) {
-			logger.error("Exception while getting skill presets.", e);
-			Packets.writeError(ctx, 0x4140, 1);
+			logger.error("Exception while getting skill sets.", e);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4140, 1);
 		}
 	}
 

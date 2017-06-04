@@ -63,7 +63,10 @@ public class Character {
 	private List<CharacterFriend> friends;
 
 	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
-	private List<CharacterSkills> skills;
+	private List<CharacterEquippedSkills> skills;
+	
+	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterSetSkills> setsSkills;
 
 	// OneToOne isn't working lazily, use OneToMany for now
 	// @JoinColumn(name = "id")
@@ -200,12 +203,20 @@ public class Character {
 		this.chatMacros = chatMacros;
 	}
 
-	public List<CharacterSkills> getSkills() {
+	public List<CharacterEquippedSkills> getSkills() {
 		return skills;
 	}
 
-	public void setSkills(List<CharacterSkills> skills) {
+	public void setSkills(List<CharacterEquippedSkills> skills) {
 		this.skills = skills;
+	}
+
+	public List<CharacterSetSkills> getSetsSkills() {
+		return setsSkills;
+	}
+
+	public void setSetsSkills(List<CharacterSetSkills> setsSkills) {
+		this.setsSkills = setsSkills;
 	}
 	
 }

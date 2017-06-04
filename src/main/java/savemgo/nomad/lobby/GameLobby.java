@@ -31,15 +31,6 @@ public class GameLobby extends NomadLobby {
 
 		switch (command) {
 
-		/** General */
-		case 0x0003:
-			ctx.close();
-			break;
-
-		case 0x0005:
-			Packets.write(ctx, 0x0005);
-			break;
-
 		/** Accounts */
 		case 0x3003:
 			Users.checkSession(ctx, in, getId(), true);

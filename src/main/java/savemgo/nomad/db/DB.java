@@ -20,7 +20,9 @@ import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterAppearance;
 import savemgo.nomad.entity.CharacterBlocked;
 import savemgo.nomad.entity.CharacterChatMacro;
+import savemgo.nomad.entity.CharacterEquippedSkills;
 import savemgo.nomad.entity.CharacterFriend;
+import savemgo.nomad.entity.CharacterSetSkills;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.News;
 import savemgo.nomad.entity.User;
@@ -65,7 +67,8 @@ public class DB {
 
 			configuration.addAnnotatedClass(Character.class).addAnnotatedClass(CharacterAppearance.class)
 					.addAnnotatedClass(CharacterBlocked.class).addAnnotatedClass(CharacterChatMacro.class)
-					.addAnnotatedClass(CharacterFriend.class).addAnnotatedClass(Lobby.class)
+					.addAnnotatedClass(CharacterEquippedSkills.class).addAnnotatedClass(CharacterFriend.class)
+					.addAnnotatedClass(CharacterSetSkills.class).addAnnotatedClass(Lobby.class)
 					.addAnnotatedClass(News.class).addAnnotatedClass(User.class);
 
 			ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()

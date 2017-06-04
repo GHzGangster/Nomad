@@ -11,8 +11,8 @@ import javax.persistence.OneToOne;
 import javax.persistence.Table;
 
 @Entity
-@Table(name = "mgo2_characters_skills")
-public class CharacterSkills {
+@Table(name = "mgo2_characters_sets_skills")
+public class CharacterSetSkills {
 
 	@Column(nullable = false, unique = true)
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,36 +21,44 @@ public class CharacterSkills {
 
 	@Column(name = "chara", nullable = false, insertable = false, updatable = false)
 	private Integer characterId;
-	
+
 	@JoinColumn(name = "chara")
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
 	private Character character;
 
+	@Column(name = "idx")
+	private Integer index;
+
+	@Column(length = 63)
+	private String name = "";
+
+	private Integer modes = 0;
+
 	@Column(name = "skill_1", nullable = false)
 	private Integer skill1;
-	
+
 	@Column(name = "skill_2", nullable = false)
 	private Integer skill2;
-	
+
 	@Column(name = "skill_3", nullable = false)
 	private Integer skill3;
-	
+
 	@Column(name = "skill_4", nullable = false)
 	private Integer skill4;
-	
+
 	@Column(name = "level_1", nullable = false)
 	private Integer level1;
-	
+
 	@Column(name = "level_2", nullable = false)
 	private Integer level2;
-	
+
 	@Column(name = "level_3", nullable = false)
 	private Integer level3;
-	
+
 	@Column(name = "level_4", nullable = false)
 	private Integer level4;
-	
-	public CharacterSkills() {
+
+	public CharacterSetSkills() {
 
 	}
 
@@ -76,6 +84,30 @@ public class CharacterSkills {
 
 	public void setCharacter(Character character) {
 		this.character = character;
+	}
+
+	public Integer getIndex() {
+		return index;
+	}
+
+	public void setIndex(Integer index) {
+		this.index = index;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String text) {
+		this.name = text;
+	}
+
+	public Integer getModes() {
+		return modes;
+	}
+
+	public void setModes(Integer modes) {
+		this.modes = modes;
 	}
 
 	public Integer getSkill1() {
@@ -141,5 +173,5 @@ public class CharacterSkills {
 	public void setLevel4(Integer level4) {
 		this.level4 = level4;
 	}
-	
+
 }

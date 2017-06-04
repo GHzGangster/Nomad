@@ -328,7 +328,10 @@ public class Users {
 				Hibernate.initialize(character);
 				Hibernate.initialize(character.getAppearance());
 				Hibernate.initialize(character.getBlocked());
+				Hibernate.initialize(character.getChatMacros());
 				Hibernate.initialize(character.getFriends());
+				Hibernate.initialize(character.getSetsSkills());
+				Hibernate.initialize(character.getSkills());
 			}
 
 			session.getTransaction().commit();
