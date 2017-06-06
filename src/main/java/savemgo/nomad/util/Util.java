@@ -19,22 +19,26 @@ import io.netty.util.CharsetUtil;
 public class Util {
 
 	public static final int KEY_XOR = 0x5a7085af;
-//	public static final int KEY_XOR = 0x0;
+	// public static final int KEY_XOR = 0x0;
 
 	public static final byte[] KEY_HMAC = new byte[] { (byte) 0x5A, (byte) 0x37, (byte) 0x2F, (byte) 0x62, (byte) 0x69,
 			(byte) 0x4A, (byte) 0x34, (byte) 0x36, (byte) 0x54, (byte) 0x7A, (byte) 0x47, (byte) 0x46, (byte) 0x2D,
 			(byte) 0x38, (byte) 0x79, (byte) 0x78 };
 
 	private static final Gson GSON = new Gson();
-	
+
 	public static JsonObject jsonDecode(String json) {
 		return GSON.fromJson(json, JsonObject.class);
 	}
-	
+
 	public static String jsonEncode(JsonObject obj) {
 		return GSON.toJson(obj);
 	}
-	
+
+	public static boolean test(int value, int flag) {
+		return (value & flag) == flag;
+	}
+
 	@SuppressWarnings({ "unchecked" })
 	public static <T> T cast(Object obj) {
 		return (T) obj;

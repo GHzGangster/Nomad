@@ -6,8 +6,8 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.FixedRecvByteBufAllocator;
-import io.netty.channel.WriteBufferWaterMark;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import savemgo.nomad.packet.Packet;
 
 public class NomadServer {
 
@@ -24,12 +24,15 @@ public class NomadServer {
 		sb.group(bossGroup, workerGroup);
 		sb.channel(NioServerSocketChannel.class);
 
+		final int RCVBUF_PER_CLIENT = Packet.MAX_PACKET_LENGTH * 4;
+		final int MAX_CLIENTS = 2000;
+		
 		sb.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
 		// sb.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10 * 1000);
-		sb.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024));
-		sb.option(ChannelOption.SO_BACKLOG, 1024);
-		sb.option(ChannelOption.SO_SNDBUF, 1024 * 1024);
-		sb.option(ChannelOption.SO_RCVBUF, 1024 * 1024);
+		sb.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(RCVBUF_PER_CLIENT));
+		sb.option(ChannelOption.SO_BACKLOG, MAX_CLIENTS);
+		sb.option(ChannelOption.SO_SNDBUF, MAX_CLIENTS * RCVBUF_PER_CLIENT);
+		sb.option(ChannelOption.SO_RCVBUF, MAX_CLIENTS * RCVBUF_PER_CLIENT);
 		sb.option(ChannelOption.SO_REUSEADDR, true);
 		// sb.option(ChannelOption.TCP_NODELAY, true);
 

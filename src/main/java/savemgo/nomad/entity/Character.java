@@ -48,8 +48,13 @@ public class Character {
 	@Column(length = 2048, name = "gameplay_options")
 	private String gameplayOptions;
 
-	private Integer lobby = 0;
-	
+	@Column(name = "lobby", nullable = true, insertable = false, updatable = false)
+	private Integer lobbyId = 0;
+
+	@JoinColumn(name = "lobby")
+	@OneToOne(fetch = FetchType.LAZY)
+	private Lobby lobby;
+
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterAppearance> appearance;
 
@@ -64,7 +69,7 @@ public class Character {
 
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterFriend> friends;
-	
+
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterHostSettings> hostSettings;
 
@@ -156,12 +161,12 @@ public class Character {
 		this.gameplayOptions = gameplayOptions;
 	}
 
-	public Integer getLobby() {
-		return lobby;
+	public Integer getLobbyId() {
+		return lobbyId;
 	}
 
-	public void setLobby(Integer lobby) {
-		this.lobby = lobby;
+	public void setLobbyId(Integer lobby) {
+		this.lobbyId = lobby;
 	}
 
 	public List<CharacterAppearance> getAppearance() {
@@ -251,5 +256,13 @@ public class Character {
 	public void setHostSettings(List<CharacterHostSettings> hostSettings) {
 		this.hostSettings = hostSettings;
 	}
-	
+
+	public Lobby getLobby() {
+		return lobby;
+	}
+
+	public void setLobby(Lobby lobby) {
+		this.lobby = lobby;
+	}
+
 }

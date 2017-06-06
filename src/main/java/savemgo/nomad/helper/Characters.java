@@ -107,38 +107,153 @@ public class Characters {
 				return;
 			}
 
-			String gameplayOptionsJson = user.getCurrentCharacter().getGameplayOptions();
-			if (gameplayOptionsJson == null) {
-				gameplayOptionsJson = "{\"names\":[\"Attacking\",\"Defensive\",\"Communication\",\"Acknowledgements\"]}";
+			String json = user.getCurrentCharacter().getGameplayOptions();
+			if (json == null) {
+				json = "{\"onlineStatusMode\":0,\"emailFriendsOnly\":false,\"receiveNotices\":true,\"receiveInvites\":true,\"normalViewVerticalInvert\":false,\"normalViewHorizontalInvert\":false,\"normalViewSpeed\":5,\"shoulderViewVerticalInvert\":false,\"shoulderViewHorizontalInvert\":false,\"shoulderViewSpeed\":5,\"firstViewVerticalInvert\":false,\"firstViewHorizontalInvert\":false,\"firstViewSpeed\":5,\"firstViewPlayerDirection\":true,\"viewChangeSpeed\":5,\"firstViewMemory\":false,\"radarLockNorth\":false,\"radarFloorHide\":false,\"hudDisplaySize\":0,\"hudHideNameTags\":false,\"lockOnEnabled\":false,\"weaponSwitchMode\":2,\"weaponSwitchA\":0,\"weaponSwitchB\":1,\"weaponSwitchC\":2,\"itemSwitchMode\":2,\"codec1Name\":\"\",\"codec1a\":1,\"codec1b\":3,\"codec1c\":4,\"codec1d\":2,\"codec2Name\":\"\",\"codec2a\":10,\"codec2b\":12,\"codec2c\":13,\"codec2d\":11,\"codec3Name\":\"\",\"codec3a\":14,\"codec3b\":16,\"codec3c\":17,\"codec3d\":15,\"codec4Name\":\"\",\"codec4a\":5,\"codec4b\":7,\"codec4c\":8,\"codec4d\":6,\"voiceChatRecognitionLevel\":5,\"voiceChatVolume\":5,\"headsetVolume\":5,\"bgmVolume\":10}";
 			}
 
-			JsonObject gameplayOptions = Util.jsonDecode(gameplayOptionsJson);
+			JsonObject data = Util.jsonDecode(json);
 
-			JsonArray names = gameplayOptions.get("names").getAsJsonArray();
+			int onlineStatusMode = data.get("onlineStatusMode").getAsInt();
+			boolean emailFriendsOnly = data.get("emailFriendsOnly").getAsBoolean();
+			boolean receiveNotices = data.get("receiveNotices").getAsBoolean();
+			boolean receiveInvites = data.get("receiveInvites").getAsBoolean();
 
-			byte bytes1[] = { (byte) 0x01, (byte) 0x40, (byte) 0x40, (byte) 0x44, (byte) 0x04, (byte) 0x00, (byte) 0x00,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x22, (byte) 0x00, (byte) 0x51,
-					(byte) 0x55, (byte) 0x10, (byte) 0x02, (byte) 0x01, (byte) 0x10, (byte) 0x11, (byte) 0xB1,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x03, (byte) 0x04,
-					(byte) 0x02, (byte) 0x0A, (byte) 0x0C, (byte) 0x0D, (byte) 0x0B, (byte) 0x0E, (byte) 0x10,
-					(byte) 0x11, (byte) 0x0F, (byte) 0x05, (byte) 0x07, (byte) 0x08, (byte) 0x06 };
-			byte bytes2[] = { (byte) 0x01, (byte) 0x00, (byte) 0x10, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-					(byte) 0x10, (byte) 0x11, (byte) 0x10, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
+			boolean normalViewVerticalInvert = data.get("normalViewVerticalInvert").getAsBoolean();
+			boolean normalViewHorizontalInvert = data.get("normalViewHorizontalInvert").getAsBoolean();
+			int normalViewSpeed = data.get("normalViewSpeed").getAsInt();
+			boolean shoulderViewVerticalInvert = data.get("shoulderViewVerticalInvert").getAsBoolean();
+			boolean shoulderViewHorizontalInvert = data.get("shoulderViewHorizontalInvert").getAsBoolean();
+			int shoulderViewSpeed = data.get("shoulderViewSpeed").getAsInt();
+			boolean firstViewVerticalInvert = data.get("firstViewVerticalInvert").getAsBoolean();
+			boolean firstViewHorizontalInvert = data.get("firstViewHorizontalInvert").getAsBoolean();
+			int firstViewSpeed = data.get("firstViewSpeed").getAsInt();
+
+			boolean firstViewPlayerDirection = data.get("firstViewPlayerDirection").getAsBoolean();
+			int viewChangeSpeed = data.get("viewChangeSpeed").getAsInt();
+			boolean firstViewMemory = data.get("firstViewMemory").getAsBoolean();
+			boolean radarLockNorth = data.get("radarLockNorth").getAsBoolean();
+			boolean radarFloorHide = data.get("radarFloorHide").getAsBoolean();
+			int hudDisplaySize = data.get("hudDisplaySize").getAsInt();
+			boolean hudHideNameTags = data.get("hudHideNameTags").getAsBoolean();
+			boolean lockOnEnabled = data.get("lockOnEnabled").getAsBoolean();
+
+			int weaponSwitchMode = data.get("weaponSwitchMode").getAsInt();
+			int weaponSwitchA = data.get("weaponSwitchA").getAsInt();
+			int weaponSwitchB = data.get("weaponSwitchB").getAsInt();
+			int weaponSwitchC = data.get("weaponSwitchC").getAsInt();
+
+			int itemSwitchMode = data.get("itemSwitchMode").getAsInt();
+
+			String codec1Name = data.get("codec1Name").getAsString();
+			int codec1a = data.get("codec1a").getAsInt();
+			int codec1b = data.get("codec1b").getAsInt();
+			int codec1c = data.get("codec1c").getAsInt();
+			int codec1d = data.get("codec1d").getAsInt();
+
+			String codec2Name = data.get("codec2Name").getAsString();
+			int codec2a = data.get("codec2a").getAsInt();
+			int codec2b = data.get("codec2b").getAsInt();
+			int codec2c = data.get("codec2c").getAsInt();
+			int codec2d = data.get("codec2d").getAsInt();
+
+			String codec3Name = data.get("codec3Name").getAsString();
+			int codec3a = data.get("codec3a").getAsInt();
+			int codec3b = data.get("codec3b").getAsInt();
+			int codec3c = data.get("codec3c").getAsInt();
+			int codec3d = data.get("codec3d").getAsInt();
+
+			String codec4Name = data.get("codec4Name").getAsString();
+			int codec4a = data.get("codec4a").getAsInt();
+			int codec4b = data.get("codec4b").getAsInt();
+			int codec4c = data.get("codec4c").getAsInt();
+			int codec4d = data.get("codec4d").getAsInt();
+
+			int voiceChatRecognitionLevel = data.get("voiceChatRecognitionLevel").getAsInt();
+			int voiceChatVolume = data.get("voiceChatVolume").getAsInt();
+			int headsetVolume = data.get("headsetVolume").getAsInt();
+			int bgmVolume = data.get("bgmVolume").getAsInt();
+
+			viewChangeSpeed -= 1;
+
+			int unknown = 1;
+
+			int privacyA = 1;
+			privacyA |= (onlineStatusMode & 0b11) << 4;
+			privacyA |= emailFriendsOnly ? 0b01000000 : 0;
+
+			int privacyB = 0;
+			privacyB |= receiveNotices ? 0b1 : 0;
+			privacyB |= receiveInvites ? 0b10000 : 0;
+
+			int normalView = 0;
+			normalView |= normalViewVerticalInvert ? 0b1 : 0;
+			normalView |= normalViewHorizontalInvert ? 0b10 : 0;
+			normalViewSpeed -= 1;
+			normalView |= (normalViewSpeed & 0b1111) << 4;
+
+			int shoulderView = 0;
+			shoulderView |= shoulderViewVerticalInvert ? 0b1 : 0;
+			shoulderView |= shoulderViewHorizontalInvert ? 0b10 : 0;
+			shoulderViewSpeed -= 1;
+			shoulderView |= (shoulderViewSpeed & 0b1111) << 4;
+
+			int firstView = 0;
+			firstView |= firstViewVerticalInvert ? 0b1 : 0;
+			firstView |= firstViewHorizontalInvert ? 0b10 : 0;
+			firstViewSpeed -= 1;
+			firstView |= (firstViewSpeed & 0b1111) << 4;
+			firstView |= firstViewPlayerDirection ? 0b100 : 0;
+
+			byte _firstViewMemory = 0;
+			_firstViewMemory |= firstViewMemory ? 0b10 : 0;
+
+			int radar = 0;
+			radar |= radarLockNorth ? 0b1 : 0;
+			radar |= radarFloorHide ? 0b10000 : 0;
+
+			int hudDisplay = 0;
+			hudDisplay |= hudDisplaySize & 0b11;
+			hudDisplay |= hudHideNameTags ? 0b10000 : 0;
+
+			int lockOnAndBGM = 0;
+			lockOnAndBGM |= lockOnEnabled ? 0b1 : 0;
+			bgmVolume += 1;
+			lockOnAndBGM |= (bgmVolume & 0b1111) << 4;
+
+			int _weaponSwitchA = 0;
+			_weaponSwitchA |= weaponSwitchA & 0b1111;
+			_weaponSwitchA |= (weaponSwitchB & 0b1111) << 4;
+
+			int _weaponSwitchB = 0;
+			_weaponSwitchB |= weaponSwitchC & 0b1111;
+
+			int switchModes = 0;
+			switchModes |= weaponSwitchMode & 0b1111;
+			switchModes |= (itemSwitchMode & 0b1111) << 4;
+
+			int voiceChatA = 1;
+			voiceChatA |= (voiceChatRecognitionLevel & 0b1111) << 4;
+
+			int voiceChatB = 0;
+			voiceChatB |= voiceChatVolume & 0b1111;
+			voiceChatB |= (headsetVolume & 0b1111) << 4;
 
 			bo = ctx.alloc().directBuffer(0x150);
 
-			bo.writeBytes(bytes1);
-
-			for (JsonElement elem : names) {
-				String name = elem.getAsString();
-				Util.writeString(name, 64, bo);
-			}
-
-			bo.writeBytes(bytes2);
+			bo.writeByte(privacyA).writeByte(normalView).writeByte(shoulderView).writeByte(firstView)
+					.writeByte(viewChangeSpeed).writeZero(6).writeByte(switchModes).writeZero(1).writeByte(voiceChatA)
+					.writeByte(voiceChatB).writeByte(_weaponSwitchA).writeByte(_weaponSwitchB).writeByte(unknown)
+					.writeByte(_firstViewMemory).writeByte(privacyB).writeByte(lockOnAndBGM).writeByte(radar)
+					.writeByte(hudDisplay).writeZero(9).writeByte(codec1a).writeByte(codec1b).writeByte(codec1c)
+					.writeByte(codec1d).writeByte(codec2a).writeByte(codec2b).writeByte(codec2c).writeByte(codec2d)
+					.writeByte(codec3a).writeByte(codec3b).writeByte(codec3c).writeByte(codec3d).writeByte(codec4a)
+					.writeByte(codec4b).writeByte(codec4c).writeByte(codec4d);
+			Util.writeString(codec1Name, 64, bo);
+			Util.writeString(codec2Name, 64, bo);
+			Util.writeString(codec3Name, 64, bo);
+			Util.writeString(codec4Name, 64, bo);
+			bo.writeBytes(BYTES_GAMEPLAY_ENDING);
 
 			Packets.write(ctx, 0x4120, bo);
 		} catch (Exception e) {
@@ -148,6 +263,12 @@ public class Characters {
 		}
 	}
 
+	private static final byte BYTES_GAMEPLAY_ENDING[] = { (byte) 0x01, (byte) 0x00, (byte) 0x10, (byte) 0x00,
+			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x10, (byte) 0x11, (byte) 0x10, (byte) 0x00, (byte) 0x00,
+			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
+
 	/**
 	 * TODO: Update information
 	 * 
@@ -155,10 +276,182 @@ public class Characters {
 	 * @param in
 	 */
 	public static void updateGameplayOptions(ChannelHandlerContext ctx, Packet in) {
+		ByteBuf bo = null;
+		Session session = null;
 		try {
-			Packets.write(ctx, 0x4111, 0);
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while updating gameplay options: No User.");
+				Packets.writeError(ctx, 0x4111, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+
+			ByteBuf bi = in.getPayload();
+			byte privacyA = bi.readByte();
+			byte normalView = bi.readByte();
+			byte shoulderView = bi.readByte();
+			byte firstView = bi.readByte();
+			byte viewChangeSpeed = bi.readByte();
+			bi.skipBytes(6);
+			byte switchModes = bi.readByte();
+			bi.skipBytes(1);
+			byte voiceChatA = bi.readByte();
+			byte voiceChatB = bi.readByte();
+			byte _weaponSwitchA = bi.readByte();
+			byte _weaponSwitchB = bi.readByte();
+			bi.skipBytes(1);
+			byte _firstViewMemory = bi.readByte();
+			byte privacyB = bi.readByte();
+			byte lockOnAndBGM = bi.readByte();
+			byte radar = bi.readByte();
+			byte hudDisplay = bi.readByte();
+			bi.skipBytes(9);
+			byte codec1a = bi.readByte();
+			byte codec1b = bi.readByte();
+			byte codec1c = bi.readByte();
+			byte codec1d = bi.readByte();
+			byte codec2a = bi.readByte();
+			byte codec2b = bi.readByte();
+			byte codec2c = bi.readByte();
+			byte codec2d = bi.readByte();
+			byte codec3a = bi.readByte();
+			byte codec3b = bi.readByte();
+			byte codec3c = bi.readByte();
+			byte codec3d = bi.readByte();
+			byte codec4a = bi.readByte();
+			byte codec4b = bi.readByte();
+			byte codec4c = bi.readByte();
+			byte codec4d = bi.readByte();
+			String codec1Name = Util.readString(bi, 64);
+			String codec2Name = Util.readString(bi, 64);
+			String codec3Name = Util.readString(bi, 64);
+			String codec4Name = Util.readString(bi, 64);
+
+			viewChangeSpeed += 1;
+
+			int onlineStatusMode = (privacyA >> 4) & 0b11;
+			boolean emailFriendsOnly = (privacyA & 0b01000000) == 0b01000000;
+
+			boolean receiveNotices = (privacyB & 0b1) == 0b1;
+			boolean receiveInvites = (privacyB & 0b10000) == 0b10000;
+
+			boolean normalViewVerticalInvert = (normalView & 0b1) == 0b1;
+			boolean normalViewHorizontalInvert = (normalView & 0b10) == 0b10;
+			int normalViewSpeed = (normalView >> 4) & 0b1111;
+			normalViewSpeed += 1;
+
+			boolean shoulderViewVerticalInvert = (shoulderView & 0b1) == 0b1;
+			boolean shoulderViewHorizontalInvert = (shoulderView & 0b10) == 0b10;
+			int shoulderViewSpeed = (shoulderView >> 4) & 0b1111;
+			shoulderViewSpeed += 1;
+
+			boolean firstViewVerticalInvert = (firstView & 0b1) == 0b1;
+			boolean firstViewHorizontalInvert = (firstView & 0b10) == 0b10;
+			int firstViewSpeed = (firstView >> 4) & 0b1111;
+			firstViewSpeed += 1;
+			boolean firstViewPlayerDirection = (firstView & 0b100) == 0b100;
+			boolean firstViewMemory = (_firstViewMemory & 0b10) == 0b10;
+
+			boolean radarLockNorth = (radar & 0b1) == 0b1;
+			boolean radarFloorHide = (radar & 0b10000) == 0b10000;
+
+			int hudDisplaySize = hudDisplay & 0b11;
+			boolean hudHideNameTags = (hudDisplay & 0b10000) == 0b10000;
+
+			boolean lockOnEnabled = (lockOnAndBGM & 0b1) == 0b1;
+			int bgmVolume = (lockOnAndBGM >> 4) & 0b1111;
+			bgmVolume -= 1;
+
+			int weaponSwitchA = _weaponSwitchA & 0b1111;
+			int weaponSwitchB = (_weaponSwitchA >> 4) & 0b1111;
+
+			int weaponSwitchC = _weaponSwitchB & 0b1111;
+
+			int weaponSwitchMode = switchModes & 0b1111;
+			int itemSwitchMode = (switchModes >> 4) & 0b1111;
+
+			int voiceChatRecognitionLevel = (voiceChatA >> 4) & 0b1111;
+
+			int voiceChatVolume = voiceChatB & 0b1111;
+			int headsetVolume = (voiceChatB >> 4) & 0b1111;
+
+			JsonObject data = new JsonObject();
+			data.addProperty("onlineStatusMode", onlineStatusMode);
+			data.addProperty("emailFriendsOnly", emailFriendsOnly);
+			data.addProperty("receiveNotices", receiveNotices);
+			data.addProperty("receiveInvites", receiveInvites);
+
+			data.addProperty("normalViewVerticalInvert", normalViewVerticalInvert);
+			data.addProperty("normalViewHorizontalInvert", normalViewHorizontalInvert);
+			data.addProperty("normalViewSpeed", normalViewSpeed);
+			data.addProperty("shoulderViewVerticalInvert", shoulderViewVerticalInvert);
+			data.addProperty("shoulderViewHorizontalInvert", shoulderViewHorizontalInvert);
+			data.addProperty("shoulderViewSpeed", shoulderViewSpeed);
+			data.addProperty("firstViewVerticalInvert", firstViewVerticalInvert);
+			data.addProperty("firstViewHorizontalInvert", firstViewHorizontalInvert);
+			data.addProperty("firstViewSpeed", firstViewSpeed);
+
+			data.addProperty("firstViewPlayerDirection", firstViewPlayerDirection);
+			data.addProperty("viewChangeSpeed", viewChangeSpeed);
+			data.addProperty("firstViewMemory", firstViewMemory);
+			data.addProperty("radarLockNorth", radarLockNorth);
+			data.addProperty("radarFloorHide", radarFloorHide);
+			data.addProperty("hudDisplaySize", hudDisplaySize);
+			data.addProperty("hudHideNameTags", hudHideNameTags);
+			data.addProperty("lockOnEnabled", lockOnEnabled);
+
+			data.addProperty("weaponSwitchMode", weaponSwitchMode);
+			data.addProperty("weaponSwitchA", weaponSwitchA);
+			data.addProperty("weaponSwitchB", weaponSwitchB);
+			data.addProperty("weaponSwitchC", weaponSwitchC);
+
+			data.addProperty("itemSwitchMode", itemSwitchMode);
+
+			data.addProperty("codec1Name", codec1Name);
+			data.addProperty("codec1a", codec1a);
+			data.addProperty("codec1b", codec1b);
+			data.addProperty("codec1c", codec1c);
+			data.addProperty("codec1d", codec1d);
+
+			data.addProperty("codec2Name", codec2Name);
+			data.addProperty("codec2a", codec2a);
+			data.addProperty("codec2b", codec2b);
+			data.addProperty("codec2c", codec2c);
+			data.addProperty("codec2d", codec2d);
+
+			data.addProperty("codec3Name", codec3Name);
+			data.addProperty("codec3a", codec3a);
+			data.addProperty("codec3b", codec3b);
+			data.addProperty("codec3c", codec3c);
+			data.addProperty("codec3d", codec3d);
+
+			data.addProperty("codec4Name", codec4Name);
+			data.addProperty("codec4a", codec4a);
+			data.addProperty("codec4b", codec4b);
+			data.addProperty("codec4c", codec4c);
+			data.addProperty("codec4d", codec4d);
+
+			data.addProperty("voiceChatRecognitionLevel", voiceChatRecognitionLevel);
+			data.addProperty("voiceChatVolume", voiceChatVolume);
+			data.addProperty("headsetVolume", headsetVolume);
+			data.addProperty("bgmVolume", bgmVolume);
+
+			String json = Util.jsonEncode(data);
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			character.setGameplayOptions(json);
+			session.update(character);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 		} catch (Exception e) {
 			logger.error("Exception while updating gameplay options.", e);
+			DB.rollbackAndClose(session);
+			Util.releaseBuffer(bo);
 			Packets.writeError(ctx, 0x4111, 1);
 		}
 	}
@@ -216,7 +509,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting updating chat macros: No User.");
-				Packets.writeError(ctx, 0x4115, 2);
+				Packets.writeError(ctx, 0x4111, 2);
 				return;
 			}
 
@@ -257,11 +550,13 @@ public class Characters {
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
-			Packets.write(ctx, 0x4115, 0);
+			if (type == 1) {
+				Packets.write(ctx, 0x4111, 0);
+			}
 		} catch (Exception e) {
 			logger.error("Exception while updating chat macros.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x4115, 1);
+			Packets.writeError(ctx, 0x4111, 1);
 		}
 	}
 
@@ -853,7 +1148,7 @@ public class Characters {
 
 					bo.writeInt(friend.getTargetId());
 					Util.writeString(friend.getTarget().getName(), 16, bo);
-					bo.writeShort(friend.getTarget().getLobby()).writeInt(gameId);
+					bo.writeShort(friend.getTarget().getLobbyId()).writeInt(gameId);
 					Util.writeString(gameHostName, 16, bo);
 					bo.writeByte(gameType);
 				});
@@ -880,7 +1175,7 @@ public class Characters {
 
 					bo.writeInt(block.getTargetId());
 					Util.writeString(block.getTarget().getName(), 16, bo);
-					bo.writeShort(block.getTarget().getLobby()).writeInt(gameId);
+					bo.writeShort(block.getTarget().getLobbyId()).writeInt(gameId);
 					Util.writeString(gameHostName, 16, bo);
 					bo.writeByte(gameType);
 				});
@@ -953,7 +1248,7 @@ public class Characters {
 
 			if (type == 0) {
 				List<CharacterFriend> friends = character.getFriends();
-				
+
 				CharacterFriend friend = new CharacterFriend();
 				friend.setCharacter(character);
 				friend.setTarget(target);
@@ -963,7 +1258,7 @@ public class Characters {
 				friends.add(friend);
 			} else {
 				List<CharacterBlocked> blocked = character.getBlocked();
-				
+
 				CharacterBlocked block = new CharacterBlocked();
 				block.setCharacter(character);
 				block.setTarget(target);
@@ -1000,7 +1295,7 @@ public class Characters {
 			}
 
 			Character character = user.getCurrentCharacter();
-			
+
 			ByteBuf bi = in.getPayload();
 			int type = bi.readByte();
 			int targetId = bi.readInt();
@@ -1018,7 +1313,7 @@ public class Characters {
 						break;
 					}
 				}
-				
+
 				if (friendToRemove != null) {
 					friends.remove(friendToRemove);
 					session.remove(friendToRemove);
@@ -1033,7 +1328,7 @@ public class Characters {
 						break;
 					}
 				}
-				
+
 				if (blockToRemove != null) {
 					blocked.remove(blockToRemove);
 					session.remove(blockToRemove);
@@ -1049,7 +1344,7 @@ public class Characters {
 				Packets.writeError(ctx, 0x4512, 3);
 				return;
 			}
-			
+
 			bo = ctx.alloc().directBuffer(0x9);
 			bo.writeInt(0).writeByte(type).writeInt(targetId);
 
@@ -1095,8 +1390,8 @@ public class Characters {
 
 				bo.writeInt(character.getId());
 				Util.writeString(character.getName(), 16, bo);
-				bo.writeShort(character.getLobby());
-				Util.writeString("Lobby " + character.getLobby(), 16, bo);
+				bo.writeShort(character.getLobbyId());
+				Util.writeString(character.getLobby().getName(), 16, bo);
 				bo.writeInt(gameId);
 				Util.writeString(gameHostName, 16, bo);
 				bo.writeByte(gameType);

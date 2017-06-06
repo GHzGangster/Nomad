@@ -26,7 +26,7 @@ public class PacketDecoder extends ChannelInboundHandlerAdapter {
 	
 	@Override
 	public void handlerAdded(ChannelHandlerContext ctx) {
-		ByteBuf buffer = ctx.alloc().buffer(0x416);
+		ByteBuf buffer = ctx.alloc().buffer(Packet.MAX_PACKET_LENGTH);
 		Attribute<ByteBuf> bytebufAttr = ctx.channel().attr(BUFFER_IN);
 		bytebufAttr.set(buffer);
 	}

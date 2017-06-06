@@ -27,6 +27,8 @@ public class Packet {
 	public static final int OFFSET_PAYLOAD = 0x18;
 
 	public static final int MAX_PAYLOAD_LENGTH = 0x3ff;
+	
+	public static final int MAX_PACKET_LENGTH = MAX_PAYLOAD_LENGTH + 1 + OFFSET_PAYLOAD ;
 
 	private static final byte[] CHECKSUM_BLANK = new byte[16];
 
