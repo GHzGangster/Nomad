@@ -67,7 +67,7 @@ public class Game {
 	@Column(length = 600, nullable = false)
 	private String rules;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<Player> players;
 
 	public Game() {

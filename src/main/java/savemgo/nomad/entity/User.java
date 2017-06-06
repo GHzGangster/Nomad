@@ -55,11 +55,11 @@ public class User {
 	@Column(name = "mgo2_chara", nullable = true, updatable = false, insertable = false)
 	private Integer currentCharacterId;
 
-	@JoinColumn(name = "mgo2_chara")
-	@ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = true)
+	@JoinColumn(name = "mgo2_chara", nullable = true)
+	@ManyToOne(fetch = FetchType.LAZY, optional = true)
 	private Character currentCharacter;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "user")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "user", orphanRemoval = true)
 	private List<Character> characters;
 
 	@Transient

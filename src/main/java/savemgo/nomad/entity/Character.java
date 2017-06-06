@@ -27,7 +27,7 @@ public class Character {
 	private Integer userId;
 
 	@JoinColumn(name = "user")
-	@OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+	@OneToOne(fetch = FetchType.LAZY)
 	private User user;
 
 	@Column(length = 16, nullable = false)
@@ -49,32 +49,32 @@ public class Character {
 	private String gameplayOptions;
 
 	private Integer lobby = 0;
-
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterAppearance> appearance;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterBlocked> blocked;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterChatMacro> chatMacros;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<ConnectionInfo> connectionInfo;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterFriend> friends;
 	
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterHostSettings> hostSettings;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterEquippedSkills> skills;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterSetGear> setsGear;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "character")
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
 	private List<CharacterSetSkills> setsSkills;
 
 	// OneToOne isn't working lazily, use OneToMany for now

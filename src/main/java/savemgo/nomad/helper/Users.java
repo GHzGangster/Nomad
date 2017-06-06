@@ -77,6 +77,17 @@ public class Users {
 				Packets.write(ctx, 0x3004, 1);
 				return false;
 			}
+			
+			if (!isCharaId) {
+				session = DB.getSession();
+				session.beginTransaction();
+				
+				user.setCurrentCharacter(null);
+				session.update(user);
+				
+				session.getTransaction().commit();
+				DB.closeSession(session);
+			}
 
 			if (!onLobbyConnected(ctx, lobbyId, user)) {
 				Packets.write(ctx, 0x3004, 2);
@@ -322,7 +333,7 @@ public class Users {
 			session.beginTransaction();
 
 			session.update(user);
-
+			
 			if (user.getCurrentCharacterId() != null) {
 				Character character = user.getCurrentCharacter();
 				Hibernate.initialize(character);

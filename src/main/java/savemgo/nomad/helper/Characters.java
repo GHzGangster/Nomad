@@ -442,8 +442,8 @@ public class Characters {
 			Packets.write(ctx, 0x4131, bo);
 		} catch (Exception e) {
 			logger.error("Exception while updating personal info.", e);
-			Packets.writeError(ctx, 0x4131, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4131, 1);
 		}
 	}
 
