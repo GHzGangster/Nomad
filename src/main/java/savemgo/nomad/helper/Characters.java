@@ -343,6 +343,8 @@ public class Characters {
 			}
 
 			Character character = user.getCurrentCharacter();
+			CharacterAppearance appearance = character.getAppearance().get(0);
+			CharacterEquippedSkills skills = character.getSkills().get(0);
 
 			ByteBuf bi = in.getPayload();
 
@@ -371,15 +373,53 @@ public class Characters {
 			int skill3 = bi.readByte();
 			int skill4 = bi.readByte();
 			bi.skipBytes(1);
-			int skill1Level = bi.readByte();
-			int skill2Level = bi.readByte();
-			int skill3Level = bi.readByte();
-			int skill4Level = bi.readByte();
+			int level1 = bi.readByte();
+			int level2 = bi.readByte();
+			int level3 = bi.readByte();
+			int level4 = bi.readByte();
 
 			bi.skipBytes(2);
 			String comment = Util.readString(bi, 128);
 
-			///////
+			character.setComment(comment);
+
+			appearance.setUpper(upper);
+			appearance.setLower(lower);
+			appearance.setHead(head);
+			appearance.setChest(chest);
+			appearance.setHands(hands);
+			appearance.setWaist(waist);
+			appearance.setFeet(feet);
+			appearance.setAccessory1(accessory1);
+			appearance.setAccessory2(accessory2);
+			appearance.setUpperColor(upperColor);
+			appearance.setLowerColor(lowerColor);
+			appearance.setHeadColor(headColor);
+			appearance.setChestColor(chestColor);
+			appearance.setHandsColor(handsColor);
+			appearance.setWaistColor(waistColor);
+			appearance.setFeetColor(feetColor);
+			appearance.setAccessory1Color(accessory1Color);
+			appearance.setAccessory2Color(accessory2Color);
+
+			skills.setSkill1(skill1);
+			skills.setSkill2(skill2);
+			skills.setSkill3(skill3);
+			skills.setSkill4(skill4);
+			skills.setLevel1(level1);
+			skills.setLevel2(level2);
+			skills.setLevel3(level3);
+			skills.setLevel4(level4);
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(character);
+			session.update(appearance);
+			session.update(skills);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			bo = ctx.alloc().directBuffer(0xba);
 
@@ -389,8 +429,7 @@ public class Characters {
 					.writeByte(accessory1).writeByte(accessory2).writeByte(headColor).writeByte(chestColor)
 					.writeByte(handsColor).writeByte(waistColor).writeByte(feetColor).writeByte(accessory1Color)
 					.writeByte(accessory2Color).writeByte(skill1).writeByte(skill2).writeByte(skill3).writeByte(skill4)
-					.writeZero(1).writeByte(skill1Level).writeByte(skill2Level).writeByte(skill3Level)
-					.writeByte(skill4Level).writeZero(1);
+					.writeZero(1).writeByte(level1).writeByte(level2).writeByte(level3).writeByte(level4).writeZero(1);
 
 			for (int i = 0; i < 4; i++) {
 				int skillExp = 0x600000;
