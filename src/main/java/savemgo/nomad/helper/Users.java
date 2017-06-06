@@ -334,7 +334,7 @@ public class Users {
 
 			session.update(user);
 			
-			if (user.getCurrentCharacterId() != null) {
+			if (user.getCurrentCharacterId() != null && user.getCurrentCharacter() != null) {
 				Character character = user.getCurrentCharacter();
 				Hibernate.initialize(character);
 				Hibernate.initialize(character.getAppearance());

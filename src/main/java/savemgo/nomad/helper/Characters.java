@@ -10,7 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Hibernate;
 import org.hibernate.Session;
+import org.hibernate.query.Query;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -565,12 +567,32 @@ public class Characters {
 	}
 
 	public static void updateSkillSets(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while updating skill sets: No User.");
+				Packets.writeError(ctx, 0x4141, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			List<CharacterSetSkills> sets = character.getSetsSkills();
+			if (sets == null) {
+				sets = new ArrayList<CharacterSetSkills>();
+				for (int index = 0; index < 3; index++) {
+					CharacterSetSkills set = new CharacterSetSkills();
+					set.setCharacter(character);
+					set.setIndex(index);
+				}
+				character.setSetsSkills(sets);
+			}
+
 			ByteBuf bi = in.getPayload();
 
-			JsonArray skillSets = new JsonArray();
-
 			for (int i = 0; i < 3; i++) {
+				CharacterSetSkills set = sets.get(i);
+
 				int modes = bi.readInt();
 				int skill1 = bi.readByte();
 				int skill2 = bi.readByte();
@@ -584,49 +606,32 @@ public class Characters {
 				bi.skipBytes(1);
 				String name = Util.readString(bi, 63, StandardCharsets.UTF_8);
 
-				JsonObject skillSet = new JsonObject();
-				skillSets.add(skillSet);
-				skillSet.addProperty("name", name);
-				skillSet.addProperty("modes", modes);
-
-				JsonArray skills = new JsonArray();
-				skillSet.add("skills", skills);
-
-				JsonObject skill = new JsonObject();
-				skills.add(skill);
-				skill.addProperty("id", skill1);
-				skill.addProperty("level", level1);
-
-				skill = new JsonObject();
-				skills.add(skill);
-				skill.addProperty("id", skill2);
-				skill.addProperty("level", level2);
-
-				skill = new JsonObject();
-				skills.add(skill);
-				skill.addProperty("id", skill3);
-				skill.addProperty("level", level3);
-
-				skill = new JsonObject();
-				skills.add(skill);
-				skill.addProperty("id", skill4);
-				skill.addProperty("level", level4);
+				set.setName(name);
+				set.setModes(modes);
+				set.setSkill1(skill1);
+				set.setSkill2(skill2);
+				set.setSkill3(skill3);
+				set.setSkill4(skill4);
+				set.setLevel1(level1);
+				set.setLevel2(level2);
+				set.setLevel3(level3);
+				set.setLevel4(level4);
 			}
 
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.add("skillSets", skillSets);
+			session = DB.getSession();
+			session.beginTransaction();
 
-			JsonObject response = Campbell.instance().getResponse("characters", "updateSkillSets", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while updating skill sets: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4141, 2);
-				return;
+			for (int i = 0; i < 3; i++) {
+				session.saveOrUpdate(sets.get(i));
 			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.write(ctx, 0x4141, 0);
 		} catch (Exception e) {
 			logger.error("Exception while updating skill sets.", e);
+			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x4141, 1);
 		}
 	}
@@ -811,43 +816,75 @@ public class Characters {
 
 	public static void getFriendsBlockedList(ChannelHandlerContext ctx, Packet in) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
+		Session session = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int type = bi.readByte();
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("type", type);
-
-			JsonObject response = Campbell.instance().getResponse("characters", "getFriendsBlockedList", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting friends/blocked list: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting friends/blocked list: No User.");
 				Packets.writeError(ctx, 0x4581, 2);
 				return;
 			}
 
-			JsonArray charas = response.get("charas").getAsJsonArray();
+			Character character = user.getCurrentCharacter();
 
-			Packets.handleMutliElementPayload(ctx, charas.size(), 23, 0x2b, payloads, (i, bo) -> {
-				JsonObject chara = charas.get(i).getAsJsonObject();
+			ByteBuf bi = in.getPayload();
+			int type = bi.readByte();
 
-				int playerId = chara.get("id").getAsInt();
-				String playerName = chara.get("name").getAsString();
+			if (type == 0) {
+				List<CharacterFriend> friends = character.getFriends();
 
-				JsonObject lobby = chara.get("lobby").getAsJsonObject();
-				int lobbyId = lobby.get("id").getAsInt();
+				session = DB.getSession();
+				session.beginTransaction();
 
-				JsonObject game = chara.get("game").getAsJsonObject();
-				int gameId = game.get("id").getAsInt();
-				String gameHostName = game.get("hostName").getAsString();
-				int gameType = game.get("type").getAsInt();
+				for (CharacterFriend friend : friends) {
+					session.update(friend);
+					Hibernate.initialize(friend.getTarget());
+				}
 
-				bo.writeInt(playerId);
-				Util.writeString(playerName, 16, bo);
-				bo.writeShort(lobbyId).writeInt(gameId);
-				Util.writeString(gameHostName, 16, bo);
-				bo.writeByte(gameType);
-			});
+				session.getTransaction().commit();
+				DB.closeSession(session);
+
+				Packets.handleMutliElementPayload(ctx, friends.size(), 23, 0x2b, payloads, (i, bo) -> {
+					CharacterFriend friend = friends.get(i);
+
+					int gameId = 0;
+					String gameHostName = "";
+					int gameType = 0;
+
+					bo.writeInt(friend.getTargetId());
+					Util.writeString(friend.getTarget().getName(), 16, bo);
+					bo.writeShort(friend.getTarget().getLobby()).writeInt(gameId);
+					Util.writeString(gameHostName, 16, bo);
+					bo.writeByte(gameType);
+				});
+			} else {
+				List<CharacterBlocked> blocked = character.getBlocked();
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				for (CharacterBlocked block : blocked) {
+					session.update(block);
+					Hibernate.initialize(block.getTarget());
+				}
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+
+				Packets.handleMutliElementPayload(ctx, blocked.size(), 23, 0x2b, payloads, (i, bo) -> {
+					CharacterBlocked block = blocked.get(i);
+
+					int gameId = 0;
+					String gameHostName = "";
+					int gameType = 0;
+
+					bo.writeInt(block.getTargetId());
+					Util.writeString(block.getTarget().getName(), 16, bo);
+					bo.writeShort(block.getTarget().getLobby()).writeInt(gameId);
+					Util.writeString(gameHostName, 16, bo);
+					bo.writeByte(gameType);
+				});
+			}
 
 			Packets.write(ctx, 0x4581, 0);
 			Packets.write(ctx, 0x4582, payloads);
@@ -873,70 +910,148 @@ public class Characters {
 
 	public static void getPersonalStats(ChannelHandlerContext ctx, Packet in) {
 		try {
-			ByteBuf bo1 = Util.readFile(new File("personal-stats-1.bin"));
-			ByteBuf bo2 = Util.readFile(new File("personal-stats-2.bin"));
-			ByteBuf bo3 = Util.readFile(new File("personal-stats-3.bin"));
-			Packets.write(ctx, 0x4103, bo1);
-			Packets.write(ctx, 0x4105, bo2);
-			Packets.write(ctx, 0x4107, bo3);
+			Packets.writeError(ctx, 0x4103, 0xff);
+			// ByteBuf bo1 = Util.readFile(new File("personal-stats-1.bin"));
+			// ByteBuf bo2 = Util.readFile(new File("personal-stats-2.bin"));
+			// ByteBuf bo3 = Util.readFile(new File("personal-stats-3.bin"));
+			// Packets.write(ctx, 0x4103, bo1);
+			// Packets.write(ctx, 0x4105, bo2);
+			// Packets.write(ctx, 0x4107, bo3);
 		} catch (Exception e) {
 			logger.error("Exception while getting personal stats.", e);
 			Packets.writeError(ctx, 0x4103, 1);
 		}
 	}
 
+	/**
+	 * TODO: Check against 64-player limit
+	 * 
+	 * @param ctx
+	 * @param in
+	 */
 	public static void addFriendsBlocked(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int type = bi.readByte();
-			int target = bi.readInt();
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("type", type);
-			data.addProperty("target", target);
-
-			JsonObject response = Campbell.instance().getResponse("characters", "addFriendsBlocked", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while adding to friends/blocked list: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while adding to friends/blocked list: No User.");
 				Packets.writeError(ctx, 0x4502, 2);
 				return;
 			}
 
+			Character character = user.getCurrentCharacter();
+
+			ByteBuf bi = in.getPayload();
+			int type = bi.readByte();
+			int targetId = bi.readInt();
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			Character target = session.get(Character.class, targetId);
+
+			if (type == 0) {
+				List<CharacterFriend> friends = character.getFriends();
+				
+				CharacterFriend friend = new CharacterFriend();
+				friend.setCharacter(character);
+				friend.setTarget(target);
+
+				session.saveOrUpdate(friend);
+				session.refresh(friend);
+				friends.add(friend);
+			} else {
+				List<CharacterBlocked> blocked = character.getBlocked();
+				
+				CharacterBlocked block = new CharacterBlocked();
+				block.setCharacter(character);
+				block.setTarget(target);
+
+				session.saveOrUpdate(block);
+				session.refresh(block);
+				blocked.add(block);
+			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
 			bo = ctx.alloc().directBuffer(0x19);
-			bo.writeInt(0).writeInt(target).writeByte(type);
-			Util.writeString("president trump", 16, bo);
+			bo.writeInt(0).writeInt(target.getId()).writeByte(type);
+			Util.writeString(target.getName(), 16, bo);
 
 			Packets.write(ctx, 0x4502, bo);
 		} catch (Exception e) {
 			logger.error("Exception while adding to friends/blocked list.", e);
-			Packets.writeError(ctx, 0x4502, 1);
 			Util.safeRelease(bo);
+			Packets.writeError(ctx, 0x4502, 1);
 		}
 	}
 
 	public static void removeFriendsBlocked(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int type = bi.readByte();
-			int target = bi.readInt();
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("type", type);
-			data.addProperty("target", target);
-
-			JsonObject response = Campbell.instance().getResponse("characters", "removeFriendsBlocked", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while removing from friends/blocked list: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while removing from friends/blocked list: No User.");
 				Packets.writeError(ctx, 0x4512, 2);
 				return;
 			}
 
+			Character character = user.getCurrentCharacter();
+			
+			ByteBuf bi = in.getPayload();
+			int type = bi.readByte();
+			int targetId = bi.readInt();
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			boolean removed = false;
+			if (type == 0) {
+				List<CharacterFriend> friends = character.getFriends();
+				CharacterFriend friendToRemove = null;
+				for (CharacterFriend friend : friends) {
+					if (friend.getTargetId() == targetId) {
+						friendToRemove = friend;
+						break;
+					}
+				}
+				
+				if (friendToRemove != null) {
+					friends.remove(friendToRemove);
+					session.remove(friendToRemove);
+					removed = true;
+				}
+			} else {
+				List<CharacterBlocked> blocked = character.getBlocked();
+				CharacterBlocked blockToRemove = null;
+				for (CharacterBlocked block : blocked) {
+					if (block.getTargetId() == targetId) {
+						blockToRemove = block;
+						break;
+					}
+				}
+				
+				if (blockToRemove != null) {
+					blocked.remove(blockToRemove);
+					session.remove(blockToRemove);
+					removed = true;
+				}
+			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			if (!removed) {
+				logger.error("Error while removing from friends/blocked list: No entry.");
+				Packets.writeError(ctx, 0x4512, 3);
+				return;
+			}
+			
 			bo = ctx.alloc().directBuffer(0x9);
-			bo.writeInt(0).writeByte(type).writeInt(target);
+			bo.writeInt(0).writeByte(type).writeInt(targetId);
 
 			Packets.write(ctx, 0x4512, bo);
 		} catch (Exception e) {
@@ -948,45 +1063,40 @@ public class Characters {
 
 	public static void search(ChannelHandlerContext ctx, Packet in) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
+		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			boolean exactOnly = bi.readBoolean();
 			boolean caseSensitive = bi.readBoolean();
 			String name = Util.readString(bi, 0x10);
 
-			JsonObject data = new JsonObject();
-			data.addProperty("name", name);
-			data.addProperty("exactOnly", exactOnly);
-			data.addProperty("caseSensitive", caseSensitive);
+			session = DB.getSession();
+			session.beginTransaction();
 
-			JsonObject response = Campbell.instance().getResponse("characters", "searchPlayer", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while searching for player: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4601, 2);
-				return;
+			if (!exactOnly) {
+				name = "%" + name + "%";
 			}
 
-			JsonArray charas = response.get("charas").getAsJsonArray();
+			Query<Character> query = session.createQuery("from Character where name like :name", Character.class);
+			query.setParameter("name", name);
+			List<Character> characters = query.list();
 
-			Packets.handleMutliElementPayload(ctx, charas.size(), 17, 0x3b, payloads, (i, bo) -> {
-				JsonObject chara = charas.get(i).getAsJsonObject();
+			Hibernate.initialize(characters);
 
-				int playerId = chara.get("id").getAsInt();
-				String playerName = chara.get("name").getAsString();
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
-				JsonObject lobby = chara.get("lobby").getAsJsonObject();
-				int lobbyId = lobby.get("id").getAsInt();
-				String lobbyName = lobby.get("name").getAsString();
+			Packets.handleMutliElementPayload(ctx, characters.size(), 17, 0x3b, payloads, (i, bo) -> {
+				Character character = characters.get(i);
 
-				JsonObject game = chara.get("game").getAsJsonObject();
-				int gameId = game.get("id").getAsInt();
-				String gameHostName = game.get("hostName").getAsString();
-				int gameType = game.get("type").getAsInt();
+				int gameId = 0;
+				String gameHostName = "";
+				int gameType = 0;
 
-				bo.writeInt(playerId);
-				Util.writeString(playerName, 16, bo);
-				bo.writeShort(lobbyId);
-				Util.writeString(lobbyName, 16, bo);
+				bo.writeInt(character.getId());
+				Util.writeString(character.getName(), 16, bo);
+				bo.writeShort(character.getLobby());
+				Util.writeString("Lobby " + character.getLobby(), 16, bo);
 				bo.writeInt(gameId);
 				Util.writeString(gameHostName, 16, bo);
 				bo.writeByte(gameType);
@@ -1002,13 +1112,13 @@ public class Characters {
 		}
 	}
 
-	public static void getCharacterOverview(ChannelHandlerContext ctx, Packet in) {
+	public static void getCharacterCard(ChannelHandlerContext ctx, Packet in) {
 		// In: 00000002 - Player ID
 		try {
 			ByteBuf bo1 = Util.readFile(new File("player-overview.bin"));
 			Packets.write(ctx, 0x4221, bo1);
 		} catch (Exception e) {
-			logger.error("Exception while getting character overview.", e);
+			logger.error("Exception while getting character card.", e);
 			Packets.writeError(ctx, 0x4221, 1);
 		}
 	}

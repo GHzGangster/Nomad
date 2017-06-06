@@ -80,7 +80,7 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4220:
-			Characters.getCharacterOverview(ctx, in);
+			Characters.getCharacterCard(ctx, in);
 			break;
 
 		case 0x4500:

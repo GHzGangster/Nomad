@@ -67,7 +67,9 @@ public class Packets {
 
 	public static void write(Channel ch, int command, AtomicReference<ByteBuf[]> abos) {
 		ByteBuf[] bos = abos.get();
-		write(ch, command, bos);
+		if (bos != null) {
+			write(ch, command, bos);
+		}
 	}
 
 	public static void write(ChannelHandlerContext ctx, int command, AtomicReference<ByteBuf[]> abos) {
