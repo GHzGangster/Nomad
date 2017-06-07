@@ -40,7 +40,7 @@ public class GameLobby extends NomadLobby {
 		case 0x4100:
 			// Get Profile Data
 			Characters.getCharacterInfo(ctx);
-			Characters.getGameplayOptions(ctx);
+			Characters.getGameplayOptionsUiSettings(ctx);
 			Characters.getChatMacros(ctx);
 			Characters.getPersonalInfo(ctx);
 			Characters.getGear(ctx);
@@ -54,12 +54,10 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4110:
-			// saveoptiondata
 			Characters.updateGameplayOptions(ctx, in);
 			break;
 
 		case 0x4112:
-			// savefiltersetting
 			Characters.updateUiSettings(ctx, in);
 			break;
 
@@ -122,11 +120,13 @@ public class GameLobby extends NomadLobby {
 
 		/** Games */
 		case 0x4300:
-			Games.getListFile(ctx, getId(), 0x4301);
+			Games.getList(ctx, getId(), 0x4301);
+//			Games.getListFile(ctx, getId(), 0x4301);
 			break;
 
 		case 0x4312:
-			Games.getDetailsFile(ctx, in, getId());
+			Games.getDetails(ctx, in, getId());
+//			Games.getDetailsFile(ctx, in, getId());
 			break;
 
 		case 0x4320:

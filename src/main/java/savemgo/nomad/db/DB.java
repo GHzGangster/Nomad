@@ -102,7 +102,12 @@ public class DB {
 	public static Connection get() {
 		Connection conn = null;
 		try {
+			long time = System.currentTimeMillis();
 			conn = cpds.getConnection();
+			time = System.currentTimeMillis() - time;
+			if (time >= 1000L) {
+				logger.debug("Took a long time to get a connection: {} ms", time);
+			}
 		} catch (Exception e) {
 			logger.error("Failed to get Connection from DB.", e);
 		}

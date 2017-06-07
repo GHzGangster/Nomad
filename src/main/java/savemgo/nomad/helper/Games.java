@@ -1,10 +1,13 @@
 package savemgo.nomad.helper;
 
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Session;
+import org.hibernate.query.Query;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -13,7 +16,9 @@ import com.google.gson.JsonObject;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.campbell.Campbell;
-import savemgo.nomad.instance.NUsers;
+import savemgo.nomad.db.DB;
+import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Player;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -33,7 +38,7 @@ public class Games {
 			Packets.writeError(ctx, command, 1);
 		}
 	}
-	
+
 	public static void getDetailsFile(ChannelHandlerContext ctx, Packet in, int lobby) {
 		try {
 			ByteBuf bo = Util.readFile(new File("gameinfo.bin"));
@@ -43,7 +48,7 @@ public class Games {
 			Packets.writeError(ctx, 0x4313, 1);
 		}
 	}
-	
+
 	public static void joinHostFile(ChannelHandlerContext ctx, Packet in) {
 		try {
 			ByteBuf bo = Util.readFile(new File("hostconnection.bin"));
@@ -54,35 +59,32 @@ public class Games {
 		}
 	}
 
-	public static void getGameList(ChannelHandlerContext ctx, int lobby, int command) {
+	public static void getList(ChannelHandlerContext ctx, int lobby, int command) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
+		Session session = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("lobby", lobby);
+			session = DB.getSession();
+			session.beginTransaction();
 
-			JsonObject response = Campbell.instance().getResponse("games", "getGameList", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting game list: " + Campbell.getResult(response));
-				Packets.writeError(ctx, command, 2);
-				return;
-			}
+			Query<Game> query = session
+					.createQuery("from Game as g left join fetch g.host left join fetch g.players as p "
+							+ "left join fetch p.character where g.lobbyId=:lobbyId", Game.class);
+			query.setParameter("lobbyId", lobby);
+			List<Game> games = query.list();
 
-			JsonArray games = response.get("games").getAsJsonArray();
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.handleMutliElementPayload(ctx, games.size(), 18, 0x37, payloads, (i, bo) -> {
-				JsonObject game = games.get(i).getAsJsonObject();
+				Game game = games.get(i);
 
-				int id = game.get("id").getAsInt();
-				String name = game.get("name").getAsString();
-				boolean locked = game.get("locked").getAsBoolean();
-				int players = game.get("players").getAsInt();
-				int maxPlayers = game.get("maxPlayers").getAsInt();
-				int currentGame = game.get("currentGame").getAsInt();
-				int stance = game.get("stance").getAsInt();
-				int ping = game.get("ping").getAsInt();
+				String jsonGames = game.getGames();
+				String jsonCommon = game.getCommon();
+				String jsonRules = game.getRules();
 
-				JsonObject common = game.get("common").getAsJsonObject();
+				List<Player> players = game.getPlayers();
 
+				JsonObject common = Util.jsonDecode(jsonCommon);
 				boolean dedicated = common.get("dedicated").getAsBoolean();
 				int briefingTime = common.get("briefingTime").getAsInt();
 				boolean nonStat = common.get("nonStat").getAsBoolean();
@@ -110,72 +112,54 @@ public class Games {
 				int teamKillKick = common.get("teamKillKick").getAsInt();
 				int idleKick = common.get("idleKick").getAsInt();
 
-				int averageLevel = game.get("averageExperience").getAsInt();
-				int hostScore = game.get("hostScore").getAsInt();
-				int hostVotes = game.get("hostVotes").getAsInt();
-
-				JsonArray jGames = game.get("games").getAsJsonArray();
-				JsonArray jGame = jGames.get(currentGame).getAsJsonArray();
+				JsonArray jGames = Util.jsonDecodeArray(jsonGames);
+				JsonArray jGame = jGames.get(game.getCurrentGame()).getAsJsonArray();
 				int rule = jGame.get(0).getAsInt();
 				int map = jGame.get(1).getAsInt();
 
-				int hostOptions = 0;
-				if (locked) {
-					hostOptions += 1;
+				int hostScore = game.getHost().getHostScore();
+				int hostVotes = game.getHost().getHostVotes();
+
+				int averageExperience = 0;
+				int numPlayers = players.size();
+				for (Player player : players) {
+					averageExperience += player.getCharacter().getExp();
 				}
-				if (dedicated) {
-					hostOptions += 2;
+				if (numPlayers > 0) {
+					averageExperience /= numPlayers;
 				}
 
-				int commonA = 0x4;
-				if (idleKick > 0) {
-					commonA += 1;
-				}
-				if (friendlyFire) {
-					commonA += 8;
-				}
-				if (ghosts) {
-					commonA += 16;
-				}
-				if (autoAim) {
-					commonA += 32;
-				}
-				if (uniquesEnabled) {
-					commonA += 128;
-				}
+				int hostOptions = 0;
+				hostOptions |= game.getPassword() != null ? 0b1 : 0;
+				hostOptions |= dedicated ? 0b10 : 0;
+
+				int commonA = 0b100;
+				commonA |= idleKick > 0 ? 0b1 : 0;
+				commonA |= friendlyFire ? 0b1000 : 0;
+				commonA |= ghosts ? 0b10000 : 0;
+				commonA |= autoAim ? 0b100000 : 0;
+				commonA |= uniquesEnabled ? 0b10000000 : 0;
 
 				int commonB = 0;
-				if (teamsSwitch) {
-					commonB += 1;
-				}
-				if (autoAssign) {
-					commonB += 2;
-				}
-				if (silentMode) {
-					commonB += 4;
-				}
-				if (enemyNametags) {
-					commonB += 8;
-				}
-				if (levelLimitEnabled) {
-					commonB += 16;
-				}
-				if (voiceChat) {
-					commonB += 64;
-				}
-				if (teamKillKick > 0) {
-					commonB += 128;
-				}
+				commonB |= teamsSwitch ? 0b1 : 0;
+				commonB |= autoAssign ? 0b10 : 0;
+				commonB |= silentMode ? 0b100 : 0;
+				commonB |= enemyNametags ? 0b1000 : 0;
+				commonB |= levelLimitEnabled ? 0b10000 : 0;
+				commonB |= voiceChat ? 0b1000000 : 0;
+				commonB |= teamKillKick > 0 ? 0b10000000 : 0;
 
 				int friendBlock = 0;
 
-				bo.writeInt(id);
-				Util.writeString(name, 16, bo);
-				bo.writeByte(hostOptions).writeByte(0x08).writeByte(rule).writeByte(map).writeZero(1)
-						.writeByte(maxPlayers).writeByte(stance).writeByte(commonA).writeByte(commonB)
-						.writeByte(players).writeInt(ping).writeByte(friendBlock).writeByte(levelLimitTolerance)
-						.writeInt(levelLimitBase).writeInt(averageLevel).writeInt(hostScore).writeInt(hostVotes)
-						.writeZero(2).writeByte(0x63);
+				int unknown = 0x8;
+
+				bo.writeInt(game.getId());
+				Util.writeString(game.getName(), 16, bo);
+				bo.writeByte(hostOptions).writeByte(unknown).writeByte(rule).writeByte(map).writeZero(1)
+						.writeByte(game.getMaxPlayers()).writeByte(game.getStance()).writeByte(commonA)
+						.writeByte(commonB).writeByte(numPlayers).writeInt(game.getPing()).writeByte(friendBlock)
+						.writeByte(levelLimitTolerance).writeInt(levelLimitBase).writeInt(averageExperience)
+						.writeInt(hostScore).writeInt(hostVotes).writeZero(2).writeByte(0x63);
 			});
 
 			Packets.write(ctx, command, 0);
@@ -183,44 +167,39 @@ public class Games {
 			Packets.write(ctx, command + 2, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting game list.", e);
-			Packets.writeError(ctx, command, 1);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffers(payloads);
+			Packets.writeError(ctx, command, 1);
 		}
 	}
 
-	public static void getGameInfo(ChannelHandlerContext ctx, Packet in, int lobbyId) {
+	public static void getDetails(ChannelHandlerContext ctx, Packet in, int lobbyId) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			int gameId = bi.readInt();
 
-			JsonObject data = new JsonObject();
-			data.addProperty("lobby", lobbyId);
-			data.addProperty("game", gameId);
+			session = DB.getSession();
+			session.beginTransaction();
 
-			JsonObject response = Campbell.instance().getResponse("games", "getGameDetails", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting game list: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4313, 2);
-				return;
-			}
+			Query<Game> query = session
+					.createQuery("from Game as g left join fetch g.host left join fetch g.players as p "
+							+ "left join fetch p.character where g.id=:gameId", Game.class);
+			query.setParameter("gameId", gameId);
 
-			JsonObject details = response.get("game").getAsJsonObject();
+			Game game = query.uniqueResult();
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
-			String name = details.get("name").getAsString();
-			String comment = details.get("comment").getAsString();			
-			int averageExperience = details.get("averageExperience").getAsInt();
-			int hostScore = details.get("hostScore").getAsInt();
-			int hostVotes = details.get("hostVotes").getAsInt();
-			int maxPlayers = details.get("maxPlayers").getAsInt();
-			int stance = details.get("stance").getAsInt();
+			String jsonGames = game.getGames();
+			String jsonCommon = game.getCommon();
+			String jsonRules = game.getRules();
 
-			JsonArray players = details.get("players").getAsJsonArray();
-			int currentPlayers = players.size();
+			List<Player> players = game.getPlayers();
 
-			JsonArray games = details.get("games").getAsJsonArray();
-
-			JsonObject common = details.get("common").getAsJsonObject();
+			JsonObject common = Util.jsonDecode(jsonCommon);
 			boolean dedicated = common.get("dedicated").getAsBoolean();
 			int briefingTime = common.get("briefingTime").getAsInt();
 			boolean nonStat = common.get("nonStat").getAsBoolean();
@@ -247,6 +226,17 @@ public class Games {
 			boolean voiceChat = common.get("voiceChat").getAsBoolean();
 			int teamKillKick = common.get("teamKillKick").getAsInt();
 			int idleKick = common.get("idleKick").getAsInt();
+
+			JsonArray jGames = Util.jsonDecodeArray(jsonGames);
+
+			int averageExperience = 0;
+			int numPlayers = players.size();
+			for (Player player : players) {
+				averageExperience += player.getCharacter().getExp();
+			}
+			if (numPlayers > 0) {
+				averageExperience /= numPlayers;
+			}
 
 			JsonObject weaponRestrictions = common.get("weaponRestrictions").getAsJsonObject();
 			boolean weaponRestrictionEnabled = weaponRestrictions.get("enabled").getAsBoolean();
@@ -313,7 +303,7 @@ public class Games {
 			boolean envg = wrItems.get("envg").getAsBoolean();
 			boolean drum = wrItems.get("drum").getAsBoolean();
 
-			JsonObject ruleSettings = details.get("ruleSettings").getAsJsonObject();
+			JsonObject ruleSettings = Util.jsonDecode(jsonRules);
 			JsonObject dm = ruleSettings.get("dm").getAsJsonObject();
 			int dmTime = dm.get("time").getAsInt();
 			int dmRounds = dm.get("rounds").getAsInt();
@@ -367,263 +357,124 @@ public class Games {
 			int raceRounds = race.get("rounds").getAsInt();
 			boolean raceExtraTime = race.get("extraTime").getAsBoolean();
 
-			int commonA = 0x4;
-			if (idleKick > 0) {
-				commonA += 1;
-			}
-			if (friendlyFire) {
-				commonA += 8;
-			}
-			if (ghosts) {
-				commonA += 16;
-			}
-			if (autoAim) {
-				commonA += 32;
-			}
-			if (uniquesEnabled) {
-				commonA += 128;
-			}
+			int commonA = 0b100;
+			commonA |= idleKick > 0 ? 0b1 : 0;
+			commonA |= friendlyFire ? 0b1000 : 0;
+			commonA |= ghosts ? 0b10000 : 0;
+			commonA |= autoAim ? 0b100000 : 0;
+			commonA |= uniquesEnabled ? 0b10000000 : 0;
 
 			int commonB = 0;
-			if (teamsSwitch) {
-				commonB += 1;
-			}
-			if (autoAssign) {
-				commonB += 2;
-			}
-			if (silentMode) {
-				commonB += 4;
-			}
-			if (enemyNametags) {
-				commonB += 8;
-			}
-			if (levelLimitEnabled) {
-				commonB += 16;
-			}
-			if (voiceChat) {
-				commonB += 64;
-			}
-			if (teamKillKick > 0) {
-				commonB += 128;
-			}
+			commonB |= teamsSwitch ? 0b1 : 0;
+			commonB |= autoAssign ? 0b10 : 0;
+			commonB |= silentMode ? 0b100 : 0;
+			commonB |= enemyNametags ? 0b1000 : 0;
+			commonB |= levelLimitEnabled ? 0b10000 : 0;
+			commonB |= voiceChat ? 0b1000000 : 0;
+			commonB |= teamKillKick > 0 ? 0b10000000 : 0;
 
 			int commonC = 0x20;
 
 			int hostOptionsExtraTimeFlags = 0;
-			if (nonStat) {
-				hostOptionsExtraTimeFlags += 2;
-			}
-			if (!scapExtraTime) {
-				hostOptionsExtraTimeFlags += 1;
-			}
-			if (!raceExtraTime) {
-				hostOptionsExtraTimeFlags += 4;
-			}
+			hostOptionsExtraTimeFlags |= !scapExtraTime ? 0b1 : 0;
+			hostOptionsExtraTimeFlags |= nonStat ? 0b10 : 0;
+			hostOptionsExtraTimeFlags |= !raceExtraTime ? 0b100 : 0;
 
 			byte[] wr = new byte[0x10];
+			wr[0] |= weaponRestrictionEnabled ? 0b1 : 0;
+			wr[0] |= !knife ? 0b10 : 0;
+			wr[0] |= !mk2 ? 0b100 : 0;
+			wr[0] |= !operator ? 0b100 : 0;
+			wr[0] |= !mk23 ? 0b10000 : 0;
+			wr[0] |= !gsr ? 0b10000000 : 0;
 
-			if (weaponRestrictionEnabled) {
-				wr[0] += 0x1;
-			}
-			if (!knife) {
-				wr[0] += 0x2;
-			}
-			if (!mk2) {
-				wr[0] += 0x4;
-			}
-			if (!operator) {
-				wr[0] += 0x8;
-			}
-			if (!mk23) {
-				wr[0] += 0x10;
-			}
-			if (!gsr) {
-				wr[0] += 0x80;
-			}
+			wr[1] |= !de ? 0b1 : 0;
+			wr[1] |= !g18 ? 0b10000000 : 0;
 
-			if (!de) {
-				wr[1] += 0x1;
-			}
-			if (!g18) {
-				wr[1] += 0x80;
-			}
+			wr[2] |= !mp5 ? 0b100 : 0;
+			wr[2] |= !p90 ? 0b10000 : 0;
+			wr[2] |= !patriot ? 0b1000000 : 0;
+			wr[2] |= !vz ? 0b10000000 : 0;
 
-			if (!mp5) {
-				wr[2] += 0x4;
-			}
-			if (!p90) {
-				wr[2] += 0x10;
-			}
-			if (!patriot) {
-				wr[2] += 0x40;
-			}
-			if (!vz) {
-				wr[2] += 0x80;
-			}
+			wr[3] |= !m4 ? 0b1 : 0;
+			wr[3] |= !ak ? 0b10 : 0;
+			wr[3] |= !g3a3 ? 0b100 : 0;
+			wr[3] |= !mk17 ? 0b1000000 : 0;
+			wr[3] |= !xm8 ? 0b10000000 : 0;
 
-			if (!m4) {
-				wr[3] += 0x1;
-			}
-			if (!ak) {
-				wr[3] += 0x2;
-			}
-			if (!g3a3) {
-				wr[3] += 0x4;
-			}
-			if (!mk17) {
-				wr[3] += 0x40;
-			}
-			if (!xm8) {
-				wr[3] += 0x80;
-			}
+			wr[4] |= !m60 ? 0b1000 : 0;
+			wr[4] |= !m870 ? 0b100000 : 0;
+			wr[4] |= !saiga ? 0b1000000 : 0;
+			wr[4] |= !vss ? 0b10000000 : 0;
 
-			if (!m60) {
-				wr[4] += 0x8;
-			}
-			if (!m870) {
-				wr[4] += 0x20;
-			}
-			if (!saiga) {
-				wr[4] += 0x40;
-			}
-			if (!vss) {
-				wr[4] += 0x80;
-			}
+			wr[5] |= !dsr ? 0b10 : 0;
+			wr[5] |= !m14 ? 0b100 : 0;
+			wr[5] |= !mosin ? 0b1000 : 0;
+			wr[5] |= !svd ? 0b10000 : 0;
 
-			if (!dsr) {
-				wr[5] += 0x2;
-			}
-			if (!m14) {
-				wr[5] += 0x4;
-			}
-			if (!mosin) {
-				wr[5] += 0x8;
-			}
-			if (!svd) {
-				wr[5] += 0x10;
-			}
+			wr[6] |= !rpg ? 0b100 : 0;
+			wr[6] |= !grenade ? 0b10000 : 0;
+			wr[6] |= !wp ? 0b100000 : 0;
+			wr[6] |= !stun ? 0b1000000 : 0;
+			wr[6] |= !chaff ? 0b10000000 : 0;
 
-			if (!rpg) {
-				wr[6] += 0x4;
-			}
-			if (!grenade) {
-				wr[6] += 0x10;
-			}
-			if (!wp) {
-				wr[6] += 0x20;
-			}
-			if (!stun) {
-				wr[6] += 0x40;
-			}
-			if (!chaff) {
-				wr[6] += 0x80;
-			}
+			wr[7] |= !smoke ? 0b1 : 0;
+			wr[7] |= !smoke_r ? 0b10 : 0;
+			wr[7] |= !smoke_g ? 0b100 : 0;
+			wr[7] |= !smoke_y ? 0b1000 : 0;
+			wr[7] |= !eloc ? 0b10000000 : 0;
 
-			if (!smoke) {
-				wr[7] += 0x1;
-			}
-			if (!smoke_r) {
-				wr[7] += 0x2;
-			}
-			if (!smoke_g) {
-				wr[7] += 0x4;
-			}
-			if (!smoke_y) {
-				wr[7] += 0x8;
-			}
-			if (!eloc) {
-				wr[7] += 0x80;
-			}
+			wr[8] |= !claymore ? 0b1 : 0;
+			wr[8] |= !sgmine ? 0b10 : 0;
+			wr[8] |= !c4 ? 0b100 : 0;
+			wr[8] |= !sgsatchel ? 0b1000 : 0;
+			wr[8] |= !magazine ? 0b100000 : 0;
 
-			if (!claymore) {
-				wr[8] += 0x1;
-			}
-			if (!sgmine) {
-				wr[8] += 0x2;
-			}
-			if (!c4) {
-				wr[8] += 0x4;
-			}
-			if (!sgsatchel) {
-				wr[8] += 0x8;
-			}
-			if (!magazine) {
-				wr[8] += 0x20;
-			}
+			wr[9] |= !shield ? 0b10 : 0;
+			wr[9] |= !masterkey ? 0b100 : 0;
+			wr[9] |= !xm320 ? 0b1000 : 0;
+			wr[9] |= !gp30 ? 0b10000 : 0;
+			wr[9] |= !suppressor ? 0b100000 : 0;
 
-			if (!shield) {
-				wr[9] += 0x2;
-			}
-			if (!masterkey) {
-				wr[9] += 0x4;
-			}
-			if (!xm320) {
-				wr[9] += 0x8;
-			}
-			if (!gp30) {
-				wr[9] += 0x10;
-			}
-			if (!suppressor) {
-				wr[9] += 0x20;
-			}
+			wr[10] |= !suppressor ? 0b1110 : 0;
 
-			if (!suppressor) {
-				wr[10] += 0xe;
-			}
+			wr[11] |= !scope ? 0b10000 : 0;
+			wr[11] |= !sight ? 0b100000 : 0;
+			wr[11] |= !lightlg ? 0b10000000 : 0;
 
-			if (!scope) {
-				wr[11] += 0x10;
-			}
-			if (!sight) {
-				wr[11] += 0x20;
-			}
-			if (!lightlg) {
-				wr[11] += 0x80;
-			}
+			wr[12] |= !laser ? 0b1 : 0;
+			wr[12] |= !lighthg ? 0b10 : 0;
+			wr[12] |= !grip ? 0b100 : 0;
 
-			if (!laser) {
-				wr[12] += 0x1;
-			}
-			if (!lighthg) {
-				wr[12] += 0x2;
-			}
-			if (!grip) {
-				wr[12] += 0x4;
-			}
+			wr[13] |= !drum ? 0b100 : 0;
 
-			if (!drum) {
-				wr[13] += 0x4;
-			}
-
-			if (!envg) {
-				wr[14] += 0x40;
-			}
+			wr[14] |= !envg ? 0b1000000 : 0;
 
 			int lobbySubtype = 8;
 
 			bo = ctx.alloc().directBuffer(0x36d);
 
 			bo.writeInt(0).writeInt(gameId);
-			Util.writeString(name, 0x10, bo);
-			Util.writeString(comment, 0x80, bo);
-			bo.writeZero(2).writeByte(lobbySubtype).writeInt(averageExperience).writeInt(hostScore).writeInt(hostVotes)
-					.writeByte(0x1);
+			Util.writeString(game.getName(), 0x10, bo);
+			Util.writeString(game.getComment(), 0x80, bo);
+			bo.writeZero(2).writeByte(lobbySubtype).writeInt(averageExperience).writeInt(game.getHost().getHostScore())
+					.writeInt(game.getHost().getHostVotes()).writeByte(0x1);
 
-			for (JsonElement o : games) {
-				JsonArray game = (JsonArray) o;
-				int rule = game.get(0).getAsInt();
-				int map = game.get(1).getAsInt();
-				int flags = game.get(2).getAsInt();
-				bo.writeByte(rule).writeByte(map).writeByte(flags);
+			for (JsonElement o : jGames) {
+				JsonArray game0 = (JsonArray) o;
+				int rule0 = game0.get(0).getAsInt();
+				int map0 = game0.get(1).getAsInt();
+				int flags0 = game0.get(2).getAsInt();
+				bo.writeByte(rule0).writeByte(map0).writeByte(flags0);
 			}
 
 			Util.padTo(0xd5, bo);
-			bo.writeZero(5).writeBytes(wr).writeByte(maxPlayers).writeByte(currentPlayers).writeInt(briefingTime)
-					.writeZero(0x16).writeByte(stance).writeByte(levelLimitTolerance).writeInt(0x16).writeInt(sneTime)
-					.writeInt(sneRounds).writeInt(capTime).writeInt(capRounds).writeInt(resTime).writeInt(resRounds)
-					.writeInt(tdmTime).writeInt(tdmRounds).writeInt(tdmTickets).writeInt(dmTime).writeInt(dmTickets)
-					.writeInt(baseTime).writeInt(baseRounds).writeInt(bombTime).writeInt(bombRounds).writeInt(tsneTime)
-					.writeInt(tsneRounds);
+			bo.writeZero(5).writeBytes(wr).writeByte(game.getMaxPlayers()).writeByte(numPlayers).writeInt(briefingTime)
+					.writeZero(0x16).writeByte(game.getStance()).writeByte(levelLimitTolerance).writeInt(0x16)
+					.writeInt(sneTime).writeInt(sneRounds).writeInt(capTime).writeInt(capRounds).writeInt(resTime)
+					.writeInt(resRounds).writeInt(tdmTime).writeInt(tdmRounds).writeInt(tdmTickets).writeInt(dmTime)
+					.writeInt(dmTickets).writeInt(baseTime).writeInt(baseRounds).writeInt(bombTime).writeInt(bombRounds)
+					.writeInt(tsneTime).writeInt(tsneRounds);
 
 			if (uniquesRandom) {
 				bo.writeByte(0x80 + uniqueRed).writeByte(0x80 + uniqueBlue);
@@ -637,15 +488,10 @@ public class Games {
 					.writeByte(scapRounds).writeByte(raceTime).writeByte(raceRounds).writeZero(1)
 					.writeByte(hostOptionsExtraTimeFlags).writeZero(4);
 
-			for (JsonElement o : players) {
-				JsonObject player = (JsonObject) o;
-				int playerId = player.get("id").getAsInt();
-				String playerName = player.get("name").getAsString();
-				int playerPing = player.get("ping").getAsInt();
-				int playerExp = player.get("exp").getAsInt();
-				bo.writeInt(playerId);
-				Util.writeString(playerName, 0x10, bo);
-				bo.writeInt(playerPing).writeInt(playerExp);
+			for (Player player : players) {
+				bo.writeInt(player.getCharacterId());
+				Util.writeString(player.getCharacter().getName(), 0x10, bo);
+				bo.writeInt(player.getPing()).writeInt(player.getCharacter().getExp());
 			}
 
 			Util.padTo(0x36d, bo);
@@ -684,8 +530,8 @@ public class Games {
 			int rule = response.get("rule").getAsInt();
 			int map = response.get("map").getAsInt();
 
-//			NUsers.setGameJoining(ctx, gameId);
-			
+			// NUsers.setGameJoining(ctx, gameId);
+
 			bo = ctx.alloc().directBuffer(0x2b);
 
 			bo.writeInt(0);
@@ -702,10 +548,10 @@ public class Games {
 			Util.releaseBuffer(bo);
 		}
 	}
-	
+
 	public static void joinFailed(ChannelHandlerContext ctx, Packet in) {
 		try {
-//			NUsers.setGameJoining(ctx, 0);
+			// NUsers.setGameJoining(ctx, 0);
 
 			Packets.write(ctx, 0x4323, 0);
 		} catch (Exception e) {

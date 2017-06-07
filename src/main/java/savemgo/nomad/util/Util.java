@@ -10,6 +10,7 @@ import java.nio.charset.CharsetEncoder;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
@@ -30,15 +31,15 @@ public class Util {
 	public static JsonObject jsonDecode(String json) {
 		return GSON.fromJson(json, JsonObject.class);
 	}
+	
+	public static JsonArray jsonDecodeArray(String json) {
+		return GSON.fromJson(json, JsonArray.class);
+	}
 
 	public static String jsonEncode(JsonObject obj) {
 		return GSON.toJson(obj);
 	}
-
-	public static boolean test(int value, int flag) {
-		return (value & flag) == flag;
-	}
-
+	
 	@SuppressWarnings({ "unchecked" })
 	public static <T> T cast(Object obj) {
 		return (T) obj;

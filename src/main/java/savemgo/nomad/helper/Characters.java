@@ -91,18 +91,12 @@ public class Characters {
 		}
 	}
 
-	/**
-	 * TODO: Figure out the payload in more detail, and/or just store the raw
-	 * bytes
-	 * 
-	 * @param ctx
-	 */
-	public static void getGameplayOptions(ChannelHandlerContext ctx) {
+	public static void getGameplayOptionsUiSettings(ChannelHandlerContext ctx) {
 		ByteBuf bo = null;
 		try {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
-				logger.error("Error while getting gameplay options: No User.");
+				logger.error("Error while getting gameplay options/ui settings: No User.");
 				Packets.writeError(ctx, 0x4120, 2);
 				return;
 			}
@@ -253,28 +247,22 @@ public class Characters {
 			Util.writeString(codec2Name, 64, bo);
 			Util.writeString(codec3Name, 64, bo);
 			Util.writeString(codec4Name, 64, bo);
-			bo.writeBytes(BYTES_GAMEPLAY_ENDING);
+			bo.writeBytes(BYTES_GAMEPLAY_UI_SETTINGS);
 
 			Packets.write(ctx, 0x4120, bo);
 		} catch (Exception e) {
-			logger.error("Exception while getting gameplay options.", e);
+			logger.error("Exception while getting gameplay options/ui settings.", e);
 			Util.releaseBuffer(bo);
 			Packets.writeError(ctx, 0x4120, 1);
 		}
 	}
 
-	private static final byte BYTES_GAMEPLAY_ENDING[] = { (byte) 0x01, (byte) 0x00, (byte) 0x10, (byte) 0x00,
+	private static final byte BYTES_GAMEPLAY_UI_SETTINGS[] = { (byte) 0x01, (byte) 0x00, (byte) 0x10, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x10, (byte) 0x11, (byte) 0x10, (byte) 0x00, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
 
-	/**
-	 * TODO: Update information
-	 * 
-	 * @param ctx
-	 * @param in
-	 */
 	public static void updateGameplayOptions(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
 		Session session = null;
@@ -577,7 +565,7 @@ public class Characters {
 			int clanId = 0;
 			String clanName = "";
 			int time1 = (int) Instant.now().getEpochSecond();
-			int rwd = 1738;
+			int rwd = character.getId();
 
 			byte bytes1[] = { (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0C, (byte) 0x00, (byte) 0x01,
 					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,

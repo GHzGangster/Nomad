@@ -32,6 +32,10 @@ public class NGames {
 		return games.search(1, (key, value) -> (key == gameId) ? value : null);
 	}
 
+	public static Integer getHostId(int gameId) {
+		return null;
+	}
+	
 	public static Character getHost(int gameId) {
 		Game game = get(gameId);
 		if (game != null) {

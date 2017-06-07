@@ -16,8 +16,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
-import savemgo.nomad.entity.Character;
-import savemgo.nomad.entity.CharacterFriend;
+import savemgo.nomad.entity.Game;
 import savemgo.nomad.lobby.AccountLobby;
 import savemgo.nomad.lobby.GameLobby;
 import savemgo.nomad.lobby.GateLobby;
@@ -31,106 +30,16 @@ public class Nomad {
 	private NomadLobby gateLobby, accountLobby, gameLobby;
 
 	public static void testHibernate() {
-		// Lobby lobby = new Lobby();
-		// lobby.setType(0);
-		// lobby.setSubtype(0);
-		// lobby.setName("test");
-		// lobby.setIp("127.0.0.1");
-		// lobby.setPort(1738);
-		//
-		// Session session =
-		// HibernateUtil.getSessionFactory().getCurrentSession();
-		// session.beginTransaction();
-		// session.save(lobby);
-		// session.getTransaction().commit();
-		//
-		// logger.debug("Lobby ID: {}", lobby.getId());
-		//
-		// HibernateUtil.getSessionFactory().close();
-
-		// Query query = session.createQuery("from Lobby");
-		// List<Lobby> lobbies = query.list();
-		// for (Lobby lobby : lobbies) {
-		// logger.debug("Lobby {} : {} {} {}", lobby.getId(), lobby.getName(),
-		// lobby.getIp(), lobby.getPort());
-		// }
-
-		// Query query = session.createQuery("FROM User WHERE id=:id");
-		// query.setParameter("id", 1);
-		//
-		// User user = (User) query.uniqueResult();
-		// logger.debug("User {} {} Banned? {}", user.getId(),
-		// user.getDisplayName(), user.isBanned());
-
-		// Query<Character> query = session.createQuery("FROM Character WHERE
-		// user=:user", Character.class);
-		// query.setParameter("user", 1);
-		//
-		// List<Character> characters = query.list();
-		// for (Character chara : characters) {
-		// logger.debug("Character {} : {}", chara.getId(), chara.getName());
-		// }
-
 		Session session = DB.getSession();
 		session.beginTransaction();
 
-		/**
-		 * Getting just the character (lazy)
-		 * 
-		 * FROM Character WHERE user=:user
-		 * 
-		 * Getting character and appearance in one query
-		 * 
-		 * FROM Character as c INNER JOIN FETCH c.appearance WHERE user=:user
-		 */
+		Query<Game> query = session.createQuery("from Game", Game.class);
+		List<Game> games = query.list();
 
-		// Query<Character> query = session.createQuery("FROM Character AS c
-		// INNER JOIN FETCH c.appearances WHERE user=:user", Character.class);
-		// query.setParameter("user", 1);
-		// List<Character> characters = query.list();
-		//
-		// for (Character character : characters) {
-		// logger.debug("Character {} : {}", character.getId(),
-		// character.getName());
-		//
-		// CharacterAppearance appearance = character.getAppearances().get(0);
-		// logger.debug("Appearance {} : {}", appearance.getId(),
-		// appearance.getGender());
-		//
-		// character.setComment("Hibernate test!");
-		// session.update(character);
-		//
-		// break;
-		// }
-
-		// Query<User> query = session.createQuery(
-		// "from User as u left join fetch u.currentCharacter left join fetch
-		// u.characters where u.id=1",
-		// User.class);
-		// User user = query.uniqueResult();
-
-		// user.setDisplayName("GHz Test 001");
-		// session.update(user);
-
-		// logger.debug("User {} : {}", user.getId(), user.getDisplayName());
-		// logger.debug("Current Character ID: {}",
-		// user.getCurrentCharacterId());
-		// logger.debug("Current Character: {}", user.getCurrentCharacter());
-
-		// List<Character> characterList = user.getCurrentCharacter();
-		// logger.debug("Character List: {}", characterList);
-
-		Query<Character> query = session.createQuery("from Character where id=1", Character.class);
-		Character character = query.uniqueResult();
-
-		List<CharacterFriend> friendsBlocked = character.getFriends();
-
-		Hibernate.initialize(friendsBlocked);
-
-		// logger.debug("Character {} : {}", character.getId(),
-		// character.getName());
-		//
-		// logger.debug("User ID: {}", character.getUserId());
+		games.size();
+		Game game = games.get(0);
+		
+		Hibernate.initialize(game.getPlayers());
 
 		session.getTransaction().commit();
 		DB.closeSession(session);

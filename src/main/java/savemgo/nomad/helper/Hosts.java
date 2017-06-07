@@ -1,7 +1,11 @@
 package savemgo.nomad.helper;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,7 +17,9 @@ import com.google.gson.JsonObject;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.campbell.Campbell;
-import savemgo.nomad.instance.NGames;
+import savemgo.nomad.entity.Character;
+import savemgo.nomad.entity.CharacterHostSettings;
+import savemgo.nomad.entity.User;
 import savemgo.nomad.instance.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
@@ -23,22 +29,41 @@ public class Hosts {
 
 	private static final Logger logger = LogManager.getLogger(Hosts.class);
 
+	private static final String SETTINGS_DEFAULT = "{\"name\":\"{CHARACTER_NAME}\",\"password\":\"\",\"stance\":0,\"comment\":\"Good luck.\",\"games\":[],\"common\":{\"dedicated\":false,\"maxPlayers\":16,\"briefingTime\":2,\"nonStat\":false,\"friendlyFire\":false,\"autoAim\":true,\"uniques\":{\"enabled\":false,\"random\":false,\"red\":0,\"blue\":2},\"enemyNametags\":true,\"silentMode\":false,\"autoAssign\":true,\"teamsSwitch\":true,\"ghosts\":false,\"levelLimit\":{\"enabled\":false,\"base\":{CHARACTER_EXP},\"tolerance\":0},\"voiceChat\":true,\"teamKillKick\":3,\"idleKick\":5,\"weaponRestrictions\":{\"enabled\":false,\"primary\":{\"vz\":true,\"p90\":true,\"mp5\":true,\"patriot\":true,\"ak\":true,\"m4\":true,\"mk17\":true,\"xm8\":true,\"g3a3\":true,\"svd\":true,\"mosin\":true,\"m14\":true,\"vss\":true,\"dsr\":true,\"m870\":true,\"saiga\":true,\"m60\":true,\"shield\":true,\"rpg\":true,\"knife\":true},\"secondary\":{\"gsr\":true,\"mk2\":true,\"operator\":true,\"g18\":true,\"mk23\":true,\"de\":true},\"support\":{\"grenade\":true,\"wp\":true,\"stun\":true,\"chaff\":true,\"smoke\":true,\"smoke_r\":true,\"smoke_g\":true,\"smoke_y\":true,\"eloc\":true,\"claymore\":true,\"sgmine\":true,\"c4\":true,\"sgsatchel\":true,\"magazine\":true},\"custom\":{\"suppressor\":true,\"gp30\":true,\"xm320\":true,\"masterkey\":true,\"scope\":true,\"sight\":true,\"laser\":true,\"lighthg\":true,\"lightlg\":true,\"grip\":true},\"items\":{\"envg\":true,\"drum\":true}}},\"ruleSettings\":{\"dm\":{\"time\":5,\"rounds\":1,\"tickets\":30},\"tdm\":{\"time\":5,\"rounds\":2,\"tickets\":51},\"res\":{\"time\":7,\"rounds\":2},\"cap\":{\"time\":4,\"rounds\":2,\"extraTime\":false},\"sne\":{\"time\":7,\"rounds\":2,\"snake\":3},\"base\":{\"time\":5,\"rounds\":2},\"bomb\":{\"time\":7,\"rounds\":2},\"tsne\":{\"time\":10,\"rounds\":2},\"sdm\":{\"time\":3,\"rounds\":2},\"int\":{\"time\":20},\"scap\":{\"time\":5,\"rounds\":2,\"extraTime\":true},\"race\":{\"time\":5,\"rounds\":2,\"extraTime\":true}}}";
+
 	public static void getSettings(ChannelHandlerContext ctx, int lobbySubtype) {
 		ByteBuf bo = null;
 		try {
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("type", lobbySubtype);
-
-			JsonObject response = Campbell.instance().getResponse("hosts", "getHostSettings", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while getting host settings: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting host settings: No User.");
 				Packets.writeError(ctx, 0x4305, 2);
 				return;
 			}
 
-			JsonObject settings = response.get("settings").getAsJsonObject();
+			Character character = user.getCurrentCharacter();
+			List<CharacterHostSettings> settingsList = character.getHostSettings();
+			if (settingsList == null) {
+				settingsList = new ArrayList<>();
+				character.setHostSettings(settingsList);
+			}
 
+			CharacterHostSettings hostSettings = settingsList.stream().filter((e) -> e.getType() == lobbySubtype)
+					.findFirst().orElse(null);
+			if (hostSettings == null) {
+				String settingsStr = SETTINGS_DEFAULT.replaceFirst(Pattern.quote("{CHARACTER_NAME}"), character.getName());
+				settingsStr = settingsStr.replaceFirst(Pattern.quote("{CHARACTER_EXP}"), character.getExp() + "");
+
+				hostSettings = new CharacterHostSettings();
+				hostSettings.setCharacter(character);
+				hostSettings.setType(lobbySubtype);
+				hostSettings.setSettings(settingsStr);
+
+				settingsList.add(hostSettings);
+			}
+			
+			JsonObject settings = Util.jsonDecode(hostSettings.getSettings());
+		
 			String name = settings.get("name").getAsString();
 			String password = settings.get("password").getAsString();
 			int stance = settings.get("stance").getAsInt();
@@ -193,239 +218,100 @@ public class Hosts {
 			int raceRounds = race.get("rounds").getAsInt();
 			boolean raceExtraTime = race.get("extraTime").getAsBoolean();
 
-			int commonA = 0x4;
-			if (idleKick > 0) {
-				commonA += 1;
-			}
-			if (friendlyFire) {
-				commonA += 8;
-			}
-			if (ghosts) {
-				commonA += 16;
-			}
-			if (autoAim) {
-				commonA += 32;
-			}
-			if (uniquesEnabled) {
-				commonA += 128;
-			}
+			int commonA = 0b100;
+			commonA |= idleKick > 0 ? 0b1 : 0;
+			commonA |= friendlyFire ? 0b1000 : 0;
+			commonA |= ghosts ? 0b10000 : 0;
+			commonA |= autoAim ? 0b100000 : 0;
+			commonA |= uniquesEnabled ? 0b10000000 : 0;
 
 			int commonB = 0;
-			if (teamsSwitch) {
-				commonB += 1;
-			}
-			if (autoAssign) {
-				commonB += 2;
-			}
-			if (silentMode) {
-				commonB += 4;
-			}
-			if (enemyNametags) {
-				commonB += 8;
-			}
-			if (levelLimitEnabled) {
-				commonB += 16;
-			}
-			if (voiceChat) {
-				commonB += 64;
-			}
-			if (teamKillKick > 0) {
-				commonB += 128;
-			}
+			commonB |= teamsSwitch ? 0b1 : 0;
+			commonB |= autoAssign ? 0b10 : 0;
+			commonB |= silentMode ? 0b100 : 0;
+			commonB |= enemyNametags ? 0b1000 : 0;
+			commonB |= levelLimitEnabled ? 0b10000 : 0;
+			commonB |= voiceChat ? 0b1000000 : 0;
+			commonB |= teamKillKick > 0 ? 0b10000000 : 0;
 
 			int commonC = 0x20;
 
 			int extraTimeFlags = 0;
-			if (!scapExtraTime) {
-				extraTimeFlags += 1;
-			}
-			if (!raceExtraTime) {
-				extraTimeFlags += 4;
-			}
-
+			extraTimeFlags |= !scapExtraTime ? 0b1 : 0;
+			extraTimeFlags |= !raceExtraTime ? 0b100 : 0;
+			
 			int hostOptions = 0;
-			if (nonStat) {
-				hostOptions += 2;
-			}
+			hostOptions |= nonStat ? 0b10 : 0;
 
 			byte[] wr = new byte[0x10];
+			wr[0] |= weaponRestrictionEnabled ? 0b1 : 0;
+			wr[0] |= !knife ? 0b10 : 0;
+			wr[0] |= !mk2 ? 0b100 : 0;
+			wr[0] |= !operator ? 0b100 : 0;
+			wr[0] |= !mk23 ? 0b10000 : 0;
+			wr[0] |= !gsr ? 0b10000000 : 0;
 
-			if (weaponRestrictionEnabled) {
-				wr[0] += 0x1;
-			}
-			if (!knife) {
-				wr[0] += 0x2;
-			}
-			if (!mk2) {
-				wr[0] += 0x4;
-			}
-			if (!operator) {
-				wr[0] += 0x8;
-			}
-			if (!mk23) {
-				wr[0] += 0x10;
-			}
-			if (!gsr) {
-				wr[0] += 0x80;
-			}
+			wr[1] |= !de ? 0b1 : 0;
+			wr[1] |= !g18 ? 0b10000000 : 0;
 
-			if (!de) {
-				wr[1] += 0x1;
-			}
-			if (!g18) {
-				wr[1] += 0x80;
-			}
+			wr[2] |= !mp5 ? 0b100 : 0;
+			wr[2] |= !p90 ? 0b10000 : 0;
+			wr[2] |= !patriot ? 0b1000000 : 0;
+			wr[2] |= !vz ? 0b10000000 : 0;
 
-			if (!mp5) {
-				wr[2] += 0x4;
-			}
-			if (!p90) {
-				wr[2] += 0x10;
-			}
-			if (!patriot) {
-				wr[2] += 0x40;
-			}
-			if (!vz) {
-				wr[2] += 0x80;
-			}
+			wr[3] |= !m4 ? 0b1 : 0;
+			wr[3] |= !ak ? 0b10 : 0;
+			wr[3] |= !g3a3 ? 0b100 : 0;
+			wr[3] |= !mk17 ? 0b1000000 : 0;
+			wr[3] |= !xm8 ? 0b10000000 : 0;
 
-			if (!m4) {
-				wr[3] += 0x1;
-			}
-			if (!ak) {
-				wr[3] += 0x2;
-			}
-			if (!g3a3) {
-				wr[3] += 0x4;
-			}
-			if (!mk17) {
-				wr[3] += 0x40;
-			}
-			if (!xm8) {
-				wr[3] += 0x80;
-			}
+			wr[4] |= !m60 ? 0b1000 : 0;
+			wr[4] |= !m870 ? 0b100000 : 0;
+			wr[4] |= !saiga ? 0b1000000 : 0;
+			wr[4] |= !vss ? 0b10000000 : 0;
 
-			if (!m60) {
-				wr[4] += 0x8;
-			}
-			if (!m870) {
-				wr[4] += 0x20;
-			}
-			if (!saiga) {
-				wr[4] += 0x40;
-			}
-			if (!vss) {
-				wr[4] += 0x80;
-			}
+			wr[5] |= !dsr ? 0b10 : 0;
+			wr[5] |= !m14 ? 0b100 : 0;
+			wr[5] |= !mosin ? 0b1000 : 0;
+			wr[5] |= !svd ? 0b10000 : 0;
 
-			if (!dsr) {
-				wr[5] += 0x2;
-			}
-			if (!m14) {
-				wr[5] += 0x4;
-			}
-			if (!mosin) {
-				wr[5] += 0x8;
-			}
-			if (!svd) {
-				wr[5] += 0x10;
-			}
+			wr[6] |= !rpg ? 0b100 : 0;
+			wr[6] |= !grenade ? 0b10000 : 0;
+			wr[6] |= !wp ? 0b100000 : 0;
+			wr[6] |= !stun ? 0b1000000 : 0;
+			wr[6] |= !chaff ? 0b10000000 : 0;
 
-			if (!rpg) {
-				wr[6] += 0x4;
-			}
-			if (!grenade) {
-				wr[6] += 0x10;
-			}
-			if (!wp) {
-				wr[6] += 0x20;
-			}
-			if (!stun) {
-				wr[6] += 0x40;
-			}
-			if (!chaff) {
-				wr[6] += 0x80;
-			}
+			wr[7] |= !smoke ? 0b1 : 0;
+			wr[7] |= !smoke_r ? 0b10 : 0;
+			wr[7] |= !smoke_g ? 0b100 : 0;
+			wr[7] |= !smoke_y ? 0b1000 : 0;
+			wr[7] |= !eloc ? 0b10000000 : 0;
 
-			if (!smoke) {
-				wr[7] += 0x1;
-			}
-			if (!smoke_r) {
-				wr[7] += 0x2;
-			}
-			if (!smoke_g) {
-				wr[7] += 0x4;
-			}
-			if (!smoke_y) {
-				wr[7] += 0x8;
-			}
-			if (!eloc) {
-				wr[7] += 0x80;
-			}
+			wr[8] |= !claymore ? 0b1 : 0;
+			wr[8] |= !sgmine ? 0b10 : 0;
+			wr[8] |= !c4 ? 0b100 : 0;
+			wr[8] |= !sgsatchel ? 0b1000 : 0;
+			wr[8] |= !magazine ? 0b100000 : 0;
 
-			if (!claymore) {
-				wr[8] += 0x1;
-			}
-			if (!sgmine) {
-				wr[8] += 0x2;
-			}
-			if (!c4) {
-				wr[8] += 0x4;
-			}
-			if (!sgsatchel) {
-				wr[8] += 0x8;
-			}
-			if (!magazine) {
-				wr[8] += 0x20;
-			}
+			wr[9] |= !shield ? 0b10 : 0;
+			wr[9] |= !masterkey ? 0b100 : 0;
+			wr[9] |= !xm320 ? 0b1000 : 0;
+			wr[9] |= !gp30 ? 0b10000 : 0;
+			wr[9] |= !suppressor ? 0b100000 : 0;
 
-			if (!shield) {
-				wr[9] += 0x2;
-			}
-			if (!masterkey) {
-				wr[9] += 0x4;
-			}
-			if (!xm320) {
-				wr[9] += 0x8;
-			}
-			if (!gp30) {
-				wr[9] += 0x10;
-			}
-			if (!suppressor) {
-				wr[9] += 0x20;
-			}
+			wr[10] |= !suppressor ? 0b1110 : 0;
 
-			if (!suppressor) {
-				wr[10] += 0xe;
-			}
+			wr[11] |= !scope ? 0b10000 : 0;
+			wr[11] |= !sight ? 0b100000 : 0;
+			wr[11] |= !lightlg ? 0b10000000 : 0;
 
-			if (!scope) {
-				wr[11] += 0x10;
-			}
-			if (!sight) {
-				wr[11] += 0x20;
-			}
-			if (!lightlg) {
-				wr[11] += 0x80;
-			}
+			wr[12] |= !laser ? 0b1 : 0;
+			wr[12] |= !lighthg ? 0b10 : 0;
+			wr[12] |= !grip ? 0b100 : 0;
 
-			if (!laser) {
-				wr[12] += 0x1;
-			}
-			if (!lighthg) {
-				wr[12] += 0x2;
-			}
-			if (!grip) {
-				wr[12] += 0x4;
-			}
+			wr[13] |= !drum ? 0b100 : 0;
 
-			if (!drum) {
-				wr[13] += 0x4;
-			}
-
-			if (!envg) {
-				wr[14] += 0x40;
-			}
+			wr[14] |= !envg ? 0b1000000 : 0;
 
 			bo = ctx.alloc().directBuffer(0x163);
 
@@ -442,7 +328,7 @@ public class Hosts {
 			}
 
 			bo.writeBoolean(dedicated);
-
+			
 			for (JsonElement o : games) {
 				JsonArray game = (JsonArray) o;
 				int rule = game.get(0).getAsInt();
@@ -476,8 +362,8 @@ public class Hosts {
 			Packets.write(ctx, 0x4305, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting host settings.", e);
-			Packets.writeError(ctx, 0x4305, 1);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4305, 1);
 		}
 	}
 
@@ -867,13 +753,13 @@ public class Hosts {
 			HashMap<String, Object> settings = new HashMap<>();
 			settings.put("name", "Game " + id);
 
-//			if (NGames.initialize(id, chara, settings) == null) {
-//				logger.error("Failed to initialize game instance.");
-//				Packets.writeError(ctx, 0x4317, 3);
-//				return;
-//			}
+			// if (NGames.initialize(id, chara, settings) == null) {
+			// logger.error("Failed to initialize game instance.");
+			// Packets.writeError(ctx, 0x4317, 3);
+			// return;
+			// }
 
-//			NUsers.setGame(ctx, id);
+			// NUsers.setGame(ctx, id);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
@@ -924,11 +810,11 @@ public class Hosts {
 
 			ConcurrentMap<String, Object> target = null;
 			int gameJoining = (Integer) target.get("gameJoining");
-			
+
 			if (gameJoining != gameId) {
-				
+
 			}
-			
+
 			bo = ctx.alloc().directBuffer(0x8);
 
 			bo.writeInt(0).writeInt(targetId);
@@ -1005,8 +891,8 @@ public class Hosts {
 				return;
 			}
 
-//			NUsers.setGame(ctx, 0);
-//			NGames.finalize(gameId);
+			// NUsers.setGame(ctx, 0);
+			// NGames.finalize(gameId);
 
 			Packets.write(ctx, 0x4381, 0);
 		} catch (Exception e) {
