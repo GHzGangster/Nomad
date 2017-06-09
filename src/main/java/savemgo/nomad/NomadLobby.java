@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.ReadTimeoutException;
+import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 
@@ -13,26 +14,14 @@ public abstract class NomadLobby extends ChannelInboundHandlerAdapter {
 
 	private static final Logger logger = LogManager.getLogger(NomadLobby.class);
 
-	private int id;
-	private int type;
-	private int subtype;
+	private Lobby lobby;
 
-	public NomadLobby(int id, int type, int subtype) {
-		this.id = id;
-		this.type = type;
-		this.subtype = subtype;
+	public NomadLobby(Lobby lobby) {
+		this.lobby = lobby;
 	}
 
-	public int getId() {
-		return id;
-	}
-
-	public int getType() {
-		return type;
-	}
-
-	public int getSubtype() {
-		return subtype;
+	public Lobby getLobby() {
+		return lobby;
 	}
 
 	public abstract boolean handlePacket(ChannelHandlerContext ctx, Packet in);

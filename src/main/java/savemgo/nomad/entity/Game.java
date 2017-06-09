@@ -44,7 +44,7 @@ public class Game {
 	private String password;
 
 	@Column(length = 128, nullable = false)
-	private String comment = "Good luck.";
+	private String comment;
 
 	@Column(name = "max_players", nullable = false)
 	private Integer maxPlayers;
@@ -67,7 +67,7 @@ public class Game {
 	@Column(length = 600, nullable = false)
 	private String rules;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "game", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "game")
 	private List<Player> players;
 
 	public Game() {

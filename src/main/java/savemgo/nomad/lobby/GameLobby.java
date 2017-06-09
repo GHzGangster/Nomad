@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.NomadLobby;
+import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.helper.Characters;
 import savemgo.nomad.helper.Chat;
 import savemgo.nomad.helper.Games;
@@ -21,8 +22,8 @@ public class GameLobby extends NomadLobby {
 
 	private static final Logger logger = LogManager.getLogger(GameLobby.class);
 
-	public GameLobby(int id) {
-		super(id, 2, 1);
+	public GameLobby(Lobby lobby) {
+		super(lobby);
 	}
 
 	@Override
@@ -33,7 +34,7 @@ public class GameLobby extends NomadLobby {
 
 		/** Accounts */
 		case 0x3003:
-			Users.checkSession(ctx, in, getId(), true);
+			Users.checkSession(ctx, in, getLobby(), true);
 			break;
 
 		/** Characters */
@@ -120,17 +121,18 @@ public class GameLobby extends NomadLobby {
 
 		/** Games */
 		case 0x4300:
-			Games.getList(ctx, getId(), 0x4301);
+			Games.getList(ctx, getLobby(), 0x4301);
 //			Games.getListFile(ctx, getId(), 0x4301);
 			break;
 
 		case 0x4312:
-			Games.getDetails(ctx, in, getId());
+			Games.getDetails(ctx, in, getLobby());
 //			Games.getDetailsFile(ctx, in, getId());
 			break;
 
 		case 0x4320:
-			Games.joinHostFile(ctx, in);
+			Games.join(ctx, in);
+//			Games.joinHostFile(ctx, in);
 			break;
 
 		case 0x4322:
@@ -139,15 +141,15 @@ public class GameLobby extends NomadLobby {
 
 		/** Host */
 		case 0x4304:
-			Hosts.getSettings(ctx, getSubtype());
+			Hosts.getSettings(ctx, getLobby());
 			break;
 
 		case 0x4310:
-			Hosts.updateSettings(ctx, in);
+			Hosts.updateSettings(ctx, in, getLobby());
 			break;
 
 		case 0x4316:
-			Hosts.createGame(ctx, getId());
+			Hosts.createGame(ctx, getLobby());
 			break;
 
 		case 0x4340:
@@ -159,7 +161,7 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4344:
-			Hosts.playerChangedTeam(ctx, in);
+			Hosts.setPlayerTeam(ctx, in);
 			break;
 
 		case 0x4346:
@@ -190,6 +192,10 @@ public class GameLobby extends NomadLobby {
 			Packets.write(ctx, 0x4399, 0);
 			break;
 
+		case 0x43a0:
+			Hosts.pass(ctx, in);
+			break;
+			
 		case 0x43a2:
 			// Unknown, end of round, stats?
 			Packets.write(ctx, 0x43a3, 0);
@@ -208,7 +214,7 @@ public class GameLobby extends NomadLobby {
 
 		/** Players */
 		case 0x4400:
-			Chat.onMessage(ctx, in);
+			Chat.send(ctx, in);
 			break;
 
 		case 0x4440:
@@ -252,10 +258,10 @@ public class GameLobby extends NomadLobby {
 
 		return true;
 	}
-
+	
 	@Override
 	public void onChannelInactive(ChannelHandlerContext ctx) {
-		Users.onLobbyDisconnected(ctx, getId());
+		Users.onLobbyDisconnected(ctx, getLobby());
 	}
 
 }

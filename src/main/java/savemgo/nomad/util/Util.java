@@ -10,7 +10,9 @@ import java.nio.charset.CharsetEncoder;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
@@ -20,13 +22,12 @@ import io.netty.util.CharsetUtil;
 public class Util {
 
 	public static final int KEY_XOR = 0x5a7085af;
-	// public static final int KEY_XOR = 0x0;
 
 	public static final byte[] KEY_HMAC = new byte[] { (byte) 0x5A, (byte) 0x37, (byte) 0x2F, (byte) 0x62, (byte) 0x69,
 			(byte) 0x4A, (byte) 0x34, (byte) 0x36, (byte) 0x54, (byte) 0x7A, (byte) 0x47, (byte) 0x46, (byte) 0x2D,
 			(byte) 0x38, (byte) 0x79, (byte) 0x78 };
 
-	private static final Gson GSON = new Gson();
+	private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
 	public static JsonObject jsonDecode(String json) {
 		return GSON.fromJson(json, JsonObject.class);
@@ -35,9 +36,9 @@ public class Util {
 	public static JsonArray jsonDecodeArray(String json) {
 		return GSON.fromJson(json, JsonArray.class);
 	}
-
-	public static String jsonEncode(JsonObject obj) {
-		return GSON.toJson(obj);
+	
+	public static String jsonEncode(JsonElement elem) {
+		return GSON.toJson(elem);
 	}
 	
 	@SuppressWarnings({ "unchecked" })

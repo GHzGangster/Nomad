@@ -1,4 +1,4 @@
-package savemgo.nomad.instance;
+package savemgo.nomad.instances;
 
 import java.util.function.Consumer;
 import java.util.function.Predicate;

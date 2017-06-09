@@ -1,4 +1,4 @@
-package savemgo.nomad.instance;
+package savemgo.nomad.instances;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
@@ -10,14 +10,14 @@ public class NUsers {
 
 	private static final ConcurrentHashMap<Channel, User> users = new ConcurrentHashMap<>();
 
-	public static boolean initialize(Channel channel, User user) {
+	public static boolean add(Channel channel, User user) {
 		if (get(channel) == null) {
 			return users.put(channel, user) == null;
 		}
 		return false;
 	}
 
-	public static boolean finalize(Channel channel) {
+	public static boolean remove(Channel channel) {
 		return users.remove(channel) != null;
 	}
 
@@ -30,7 +30,7 @@ public class NUsers {
 	}
 
 	public static User getByCharacterId(int charaId) {
-		return get((e) -> (Integer) e.getCurrentCharacterId() == charaId);
+		return get((e) -> e != null && e.getCurrentCharacterId() != null && (Integer) e.getCurrentCharacterId() == charaId);
 	}
 
 }

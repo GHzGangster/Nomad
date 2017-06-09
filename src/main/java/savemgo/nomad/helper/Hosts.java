@@ -2,13 +2,13 @@ package savemgo.nomad.helper;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Hibernate;
+import org.hibernate.Session;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -16,11 +16,15 @@ import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.campbell.Campbell;
+import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterHostSettings;
+import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Lobby;
+import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
-import savemgo.nomad.instance.NUsers;
+import savemgo.nomad.instances.NGames;
+import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -29,9 +33,9 @@ public class Hosts {
 
 	private static final Logger logger = LogManager.getLogger(Hosts.class);
 
-	private static final String SETTINGS_DEFAULT = "{\"name\":\"{CHARACTER_NAME}\",\"password\":\"\",\"stance\":0,\"comment\":\"Good luck.\",\"games\":[],\"common\":{\"dedicated\":false,\"maxPlayers\":16,\"briefingTime\":2,\"nonStat\":false,\"friendlyFire\":false,\"autoAim\":true,\"uniques\":{\"enabled\":false,\"random\":false,\"red\":0,\"blue\":2},\"enemyNametags\":true,\"silentMode\":false,\"autoAssign\":true,\"teamsSwitch\":true,\"ghosts\":false,\"levelLimit\":{\"enabled\":false,\"base\":{CHARACTER_EXP},\"tolerance\":0},\"voiceChat\":true,\"teamKillKick\":3,\"idleKick\":5,\"weaponRestrictions\":{\"enabled\":false,\"primary\":{\"vz\":true,\"p90\":true,\"mp5\":true,\"patriot\":true,\"ak\":true,\"m4\":true,\"mk17\":true,\"xm8\":true,\"g3a3\":true,\"svd\":true,\"mosin\":true,\"m14\":true,\"vss\":true,\"dsr\":true,\"m870\":true,\"saiga\":true,\"m60\":true,\"shield\":true,\"rpg\":true,\"knife\":true},\"secondary\":{\"gsr\":true,\"mk2\":true,\"operator\":true,\"g18\":true,\"mk23\":true,\"de\":true},\"support\":{\"grenade\":true,\"wp\":true,\"stun\":true,\"chaff\":true,\"smoke\":true,\"smoke_r\":true,\"smoke_g\":true,\"smoke_y\":true,\"eloc\":true,\"claymore\":true,\"sgmine\":true,\"c4\":true,\"sgsatchel\":true,\"magazine\":true},\"custom\":{\"suppressor\":true,\"gp30\":true,\"xm320\":true,\"masterkey\":true,\"scope\":true,\"sight\":true,\"laser\":true,\"lighthg\":true,\"lightlg\":true,\"grip\":true},\"items\":{\"envg\":true,\"drum\":true}}},\"ruleSettings\":{\"dm\":{\"time\":5,\"rounds\":1,\"tickets\":30},\"tdm\":{\"time\":5,\"rounds\":2,\"tickets\":51},\"res\":{\"time\":7,\"rounds\":2},\"cap\":{\"time\":4,\"rounds\":2,\"extraTime\":false},\"sne\":{\"time\":7,\"rounds\":2,\"snake\":3},\"base\":{\"time\":5,\"rounds\":2},\"bomb\":{\"time\":7,\"rounds\":2},\"tsne\":{\"time\":10,\"rounds\":2},\"sdm\":{\"time\":3,\"rounds\":2},\"int\":{\"time\":20},\"scap\":{\"time\":5,\"rounds\":2,\"extraTime\":true},\"race\":{\"time\":5,\"rounds\":2,\"extraTime\":true}}}";
+	private static final String SETTINGS_DEFAULT = "{\"name\":\"{CHARACTER_NAME}\",\"password\":null,\"stance\":0,\"comment\":\"Good luck.\",\"games\":[],\"common\":{\"dedicated\":false,\"maxPlayers\":16,\"briefingTime\":2,\"nonStat\":false,\"friendlyFire\":false,\"autoAim\":true,\"uniques\":{\"enabled\":false,\"random\":false,\"red\":0,\"blue\":2},\"enemyNametags\":true,\"silentMode\":false,\"autoAssign\":true,\"teamsSwitch\":true,\"ghosts\":false,\"levelLimit\":{\"enabled\":false,\"base\":{CHARACTER_EXP},\"tolerance\":0},\"voiceChat\":true,\"teamKillKick\":3,\"idleKick\":5,\"weaponRestrictions\":{\"enabled\":false,\"primary\":{\"vz\":true,\"p90\":true,\"mp5\":true,\"patriot\":true,\"ak\":true,\"m4\":true,\"mk17\":true,\"xm8\":true,\"g3a3\":true,\"svd\":true,\"mosin\":true,\"m14\":true,\"vss\":true,\"dsr\":true,\"m870\":true,\"saiga\":true,\"m60\":true,\"shield\":true,\"rpg\":true,\"knife\":true},\"secondary\":{\"gsr\":true,\"mk2\":true,\"operator\":true,\"g18\":true,\"mk23\":true,\"de\":true},\"support\":{\"grenade\":true,\"wp\":true,\"stun\":true,\"chaff\":true,\"smoke\":true,\"smoke_r\":true,\"smoke_g\":true,\"smoke_y\":true,\"eloc\":true,\"claymore\":true,\"sgmine\":true,\"c4\":true,\"sgsatchel\":true,\"magazine\":true},\"custom\":{\"suppressor\":true,\"gp30\":true,\"xm320\":true,\"masterkey\":true,\"scope\":true,\"sight\":true,\"laser\":true,\"lighthg\":true,\"lightlg\":true,\"grip\":true},\"items\":{\"envg\":true,\"drum\":true}}},\"ruleSettings\":{\"dm\":{\"time\":5,\"rounds\":1,\"tickets\":30},\"tdm\":{\"time\":5,\"rounds\":2,\"tickets\":51},\"res\":{\"time\":7,\"rounds\":2},\"cap\":{\"time\":4,\"rounds\":2,\"extraTime\":false},\"sne\":{\"time\":7,\"rounds\":2,\"snake\":3},\"base\":{\"time\":5,\"rounds\":2},\"bomb\":{\"time\":7,\"rounds\":2},\"tsne\":{\"time\":10,\"rounds\":2},\"sdm\":{\"time\":3,\"rounds\":2},\"int\":{\"time\":20},\"scap\":{\"time\":5,\"rounds\":2,\"extraTime\":true},\"race\":{\"time\":5,\"rounds\":2,\"extraTime\":true}}}";
 
-	public static void getSettings(ChannelHandlerContext ctx, int lobbySubtype) {
+	public static void getSettings(ChannelHandlerContext ctx, Lobby lobby) {
 		ByteBuf bo = null;
 		try {
 			User user = NUsers.get(ctx.channel());
@@ -48,24 +52,26 @@ public class Hosts {
 				character.setHostSettings(settingsList);
 			}
 
-			CharacterHostSettings hostSettings = settingsList.stream().filter((e) -> e.getType() == lobbySubtype)
+			CharacterHostSettings hostSettings = settingsList.stream().filter((e) -> e.getType() == lobby.getSubtype())
 					.findFirst().orElse(null);
 			if (hostSettings == null) {
-				String settingsStr = SETTINGS_DEFAULT.replaceFirst(Pattern.quote("{CHARACTER_NAME}"), character.getName());
+				String settingsStr = SETTINGS_DEFAULT.replaceFirst(Pattern.quote("{CHARACTER_NAME}"),
+						character.getName());
 				settingsStr = settingsStr.replaceFirst(Pattern.quote("{CHARACTER_EXP}"), character.getExp() + "");
 
 				hostSettings = new CharacterHostSettings();
 				hostSettings.setCharacter(character);
-				hostSettings.setType(lobbySubtype);
+				hostSettings.setType(lobby.getSubtype());
 				hostSettings.setSettings(settingsStr);
 
 				settingsList.add(hostSettings);
 			}
-			
+
 			JsonObject settings = Util.jsonDecode(hostSettings.getSettings());
-		
+
 			String name = settings.get("name").getAsString();
-			String password = settings.get("password").getAsString();
+			String password = settings.get("password") != null && !settings.get("password").isJsonNull()
+					? settings.get("password").getAsString() : null;
 			int stance = settings.get("stance").getAsInt();
 			String comment = settings.get("comment").getAsString();
 			JsonArray games = settings.get("games").getAsJsonArray();
@@ -239,7 +245,7 @@ public class Hosts {
 			int extraTimeFlags = 0;
 			extraTimeFlags |= !scapExtraTime ? 0b1 : 0;
 			extraTimeFlags |= !raceExtraTime ? 0b100 : 0;
-			
+
 			int hostOptions = 0;
 			hostOptions |= nonStat ? 0b10 : 0;
 
@@ -319,7 +325,7 @@ public class Hosts {
 			Util.writeString(name, 0x10, bo);
 			Util.writeString(comment, 0x80, bo);
 
-			if (!password.isEmpty()) {
+			if (password != null) {
 				bo.writeByte(1);
 				Util.writeString(password, 0x0f, bo);
 				bo.writeZero(1);
@@ -328,7 +334,7 @@ public class Hosts {
 			}
 
 			bo.writeBoolean(dedicated);
-			
+
 			for (JsonElement o : games) {
 				JsonArray game = (JsonArray) o;
 				int rule = game.get(0).getAsInt();
@@ -367,14 +373,40 @@ public class Hosts {
 		}
 	}
 
-	public static void updateSettings(ChannelHandlerContext ctx, Packet in) {
+	public static void updateSettings(ChannelHandlerContext ctx, Packet in, Lobby lobby) {
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while updating host settings: No User.");
+				Packets.writeError(ctx, 0x4311, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			List<CharacterHostSettings> settingsList = character.getHostSettings();
+			if (settingsList == null) {
+				settingsList = new ArrayList<>();
+				character.setHostSettings(settingsList);
+			}
+
+			CharacterHostSettings hostSettings = settingsList.stream().filter((e) -> e.getType() == lobby.getSubtype())
+					.findFirst().orElse(null);
+			if (hostSettings == null) {
+				hostSettings = new CharacterHostSettings();
+				hostSettings.setCharacter(character);
+				hostSettings.setType(lobby.getSubtype());
+				hostSettings.setSettings(null);
+
+				settingsList.add(hostSettings);
+			}
+
 			ByteBuf bi = in.getPayload();
 
 			String name = Util.readString(bi, 0x10);
 			String comment = Util.readString(bi, 0x80);
 			boolean passwordEnabled = bi.readBoolean();
-			String password = "";
+			String password = null;
 			if (passwordEnabled) {
 				password = Util.readString(bi, 0xf);
 				bi.skipBytes(1);
@@ -383,7 +415,7 @@ public class Hosts {
 			}
 			boolean dedicated = bi.readBoolean();
 
-			int lobbySubtype = bi.readByte();
+			int lobbySubtype2 = bi.readByte();
 
 			byte[] gamesBytes = new byte[0x2d];
 			bi.readBytes(gamesBytes);
@@ -468,14 +500,14 @@ public class Hosts {
 			common.addProperty("maxPlayers", maxPlayers);
 			common.addProperty("briefingTime", briefingTime);
 
-			boolean nonStat = (hostOptions & 2) == 2;
-			boolean friendlyFire = (commonA & 8) == 8;
-			boolean autoAim = (commonA & 32) == 32;
+			boolean nonStat = (hostOptions & 0b10) == 0b10;
+			boolean friendlyFire = (commonA & 0b1000) == 0b1000;
+			boolean autoAim = (commonA & 0b100000) == 0b100000;
 			common.addProperty("nonStat", nonStat);
 			common.addProperty("friendlyFire", friendlyFire);
 			common.addProperty("autoAim", autoAim);
 
-			boolean uniquesEnabled = (commonA & 128) == 128;
+			boolean uniquesEnabled = (commonA & 0b10000000) == 0b10000000;
 			boolean uniquesRandom = false;
 			if ((uniqueRed & 0x80) == 0x80) {
 				uniquesRandom = true;
@@ -490,11 +522,11 @@ public class Hosts {
 			uniques.addProperty("red", uniqueRed);
 			uniques.addProperty("blue", uniqueBlue);
 
-			boolean enemyNametags = (commonB & 8) == 8;
-			boolean silentMode = (commonB & 4) == 4;
-			boolean autoAssign = (commonB & 2) == 2;
-			boolean teamsSwitch = (commonB & 1) == 1;
-			boolean ghosts = (commonA & 16) == 16;
+			boolean enemyNametags = (commonB & 0b1000) == 0b1000;
+			boolean silentMode = (commonB & 0b100) == 0b100;
+			boolean autoAssign = (commonB & 0b10) == 0b10;
+			boolean teamsSwitch = (commonB & 0b1) == 0b1;
+			boolean ghosts = (commonA & 0b10000) == 0b10000;
 			common.addProperty("enemyNametags", enemyNametags);
 			common.addProperty("silentMode", silentMode);
 			common.addProperty("autoAssign", autoAssign);
@@ -503,16 +535,16 @@ public class Hosts {
 
 			JsonObject levelLimit = new JsonObject();
 			common.add("levelLimit", levelLimit);
-			boolean levelLimitEnabled = (commonB & 16) == 16;
+			boolean levelLimitEnabled = (commonB & 0b10000) == 0b10000;
 			levelLimit.addProperty("enabled", levelLimitEnabled);
 			levelLimit.addProperty("base", levelLimitBase);
 			levelLimit.addProperty("tolerance", levelLimitTolerance);
 
-			boolean voiceChat = (commonB & 64) == 64;
-			if ((commonB & 128) != 128) {
+			boolean voiceChat = (commonB & 0b1000000) == 0b1000000;
+			if ((commonB & 0b10000000) != 0b10000000) {
 				teamKillKick = 0;
 			}
-			if ((commonA & 1) != 1) {
+			if ((commonA & 0b1) != 0b1) {
 				idleKick = 0;
 			}
 			common.addProperty("voiceChat", voiceChat);
@@ -521,31 +553,31 @@ public class Hosts {
 
 			JsonObject weaponRestrictions = new JsonObject();
 			common.add("weaponRestrictions", weaponRestrictions);
-			boolean weaponRestrictionsEnabled = (wr[0] & 1) == 1;
+			boolean weaponRestrictionsEnabled = (wr[0] & 0b1) == 0b1;
 			weaponRestrictions.addProperty("enabled", weaponRestrictionsEnabled);
 
 			JsonObject wrPrimary = new JsonObject();
 			weaponRestrictions.add("primary", wrPrimary);
-			boolean vz = (wr[2] & 0x80) == 0;
-			boolean p90 = (wr[2] & 0x10) == 0;
-			boolean mp5 = (wr[2] & 0x4) == 0;
-			boolean patriot = (wr[2] & 0x40) == 0;
-			boolean ak = (wr[3] & 0x2) == 0;
-			boolean m4 = (wr[3] & 0x1) == 0;
-			boolean mk17 = (wr[3] & 0x40) == 0;
-			boolean xm8 = (wr[3] & 0x80) == 0;
-			boolean g3a3 = (wr[3] & 0x4) == 0;
-			boolean svd = (wr[5] & 0x10) == 0;
-			boolean mosin = (wr[5] & 0x8) == 0;
-			boolean m14 = (wr[5] & 0x4) == 0;
-			boolean vss = (wr[4] & 0x80) == 0;
-			boolean dsr = (wr[5] & 0x2) == 0;
-			boolean m870 = (wr[4] & 0x20) == 0;
-			boolean saiga = (wr[4] & 0x40) == 0;
-			boolean m60 = (wr[4] & 0x8) == 0;
-			boolean shield = (wr[9] & 0x2) == 0;
-			boolean rpg = (wr[6] & 0x4) == 0;
-			boolean knife = (wr[0] & 0x2) == 0;
+			boolean vz = (wr[2] & 0b10000000) == 0;
+			boolean p90 = (wr[2] & 0b10000) == 0;
+			boolean mp5 = (wr[2] & 0b100) == 0;
+			boolean patriot = (wr[2] & 0b1000000) == 0;
+			boolean ak = (wr[3] & 0b10) == 0;
+			boolean m4 = (wr[3] & 0b1) == 0;
+			boolean mk17 = (wr[3] & 0b1000000) == 0;
+			boolean xm8 = (wr[3] & 0b10000000) == 0;
+			boolean g3a3 = (wr[3] & 0b100) == 0;
+			boolean svd = (wr[5] & 0b10000) == 0;
+			boolean mosin = (wr[5] & 0b1000) == 0;
+			boolean m14 = (wr[5] & 0b100) == 0;
+			boolean vss = (wr[4] & 0b10000000) == 0;
+			boolean dsr = (wr[5] & 0b10) == 0;
+			boolean m870 = (wr[4] & 0b100000) == 0;
+			boolean saiga = (wr[4] & 0b1000000) == 0;
+			boolean m60 = (wr[4] & 0b1000) == 0;
+			boolean shield = (wr[9] & 0b10) == 0;
+			boolean rpg = (wr[6] & 0b100) == 0;
+			boolean knife = (wr[0] & 0b10) == 0;
 			wrPrimary.addProperty("vz", vz);
 			wrPrimary.addProperty("p90", p90);
 			wrPrimary.addProperty("mp5", mp5);
@@ -569,12 +601,12 @@ public class Hosts {
 
 			JsonObject wrSecondary = new JsonObject();
 			weaponRestrictions.add("secondary", wrSecondary);
-			boolean gsr = (wr[0] & 0x80) == 0;
-			boolean mk2 = (wr[0] & 0x4) == 0;
-			boolean operator = (wr[0] & 0x8) == 0;
-			boolean g18 = (wr[1] & 0x80) == 0;
-			boolean mk23 = (wr[0] & 0x10) == 0;
-			boolean de = (wr[1] & 0x1) == 0;
+			boolean gsr = (wr[0] & 0b10000000) == 0;
+			boolean mk2 = (wr[0] & 0b100) == 0;
+			boolean operator = (wr[0] & 0b100) == 0;
+			boolean g18 = (wr[1] & 0b10000000) == 0;
+			boolean mk23 = (wr[0] & 0b10000) == 0;
+			boolean de = (wr[1] & 0b1) == 0;
 			wrSecondary.addProperty("gsr", gsr);
 			wrSecondary.addProperty("mk2", mk2);
 			wrSecondary.addProperty("operator", operator);
@@ -584,20 +616,20 @@ public class Hosts {
 
 			JsonObject wrSupport = new JsonObject();
 			weaponRestrictions.add("support", wrSupport);
-			boolean grenade = (wr[6] & 0x10) == 0;
-			boolean wp = (wr[6] & 0x20) == 0;
-			boolean stun = (wr[6] & 0x40) == 0;
-			boolean chaff = (wr[6] & 0x80) == 0;
-			boolean smoke = (wr[7] & 0x1) == 0;
-			boolean smoke_r = (wr[7] & 0x2) == 0;
-			boolean smoke_g = (wr[7] & 0x4) == 0;
-			boolean smoke_y = (wr[7] & 0x8) == 0;
-			boolean eloc = (wr[7] & 0x80) == 0;
-			boolean claymore = (wr[8] & 0x1) == 0;
-			boolean sgmine = (wr[8] & 0x2) == 0;
-			boolean c4 = (wr[8] & 0x4) == 0;
-			boolean sgsatchel = (wr[8] & 0x8) == 0;
-			boolean magazine = (wr[8] & 0x20) == 0;
+			boolean grenade = (wr[6] & 0b10000) == 0;
+			boolean wp = (wr[6] & 0b100000) == 0;
+			boolean stun = (wr[6] & 0b1000000) == 0;
+			boolean chaff = (wr[6] & 0b10000000) == 0;
+			boolean smoke = (wr[7] & 0b1) == 0;
+			boolean smoke_r = (wr[7] & 0b10) == 0;
+			boolean smoke_g = (wr[7] & 0b100) == 0;
+			boolean smoke_y = (wr[7] & 0b1000) == 0;
+			boolean eloc = (wr[7] & 0b10000000) == 0;
+			boolean claymore = (wr[8] & 0b1) == 0;
+			boolean sgmine = (wr[8] & 0b10) == 0;
+			boolean c4 = (wr[8] & 0b100) == 0;
+			boolean sgsatchel = (wr[8] & 0b1000) == 0;
+			boolean magazine = (wr[8] & 0b100000) == 0;
 			wrSupport.addProperty("grenade", grenade);
 			wrSupport.addProperty("wp", wp);
 			wrSupport.addProperty("stun", stun);
@@ -615,16 +647,16 @@ public class Hosts {
 
 			JsonObject wrCustom = new JsonObject();
 			weaponRestrictions.add("custom", wrCustom);
-			boolean suppressor = (wr[9] & 0x20) == 0;
-			boolean gp30 = (wr[9] & 0x10) == 0;
-			boolean xm320 = (wr[9] & 0x8) == 0;
-			boolean masterkey = (wr[9] & 0x4) == 0;
-			boolean scope = (wr[11] & 0x10) == 0;
-			boolean sight = (wr[11] & 0x20) == 0;
-			boolean laser = (wr[12] & 0x1) == 0;
-			boolean lighthg = (wr[12] & 0x2) == 0;
-			boolean lightlg = (wr[11] & 0x80) == 0;
-			boolean grip = (wr[12] & 0x4) == 0;
+			boolean suppressor = (wr[9] & 0b100000) == 0;
+			boolean gp30 = (wr[9] & 0b10000) == 0;
+			boolean xm320 = (wr[9] & 0b1000) == 0;
+			boolean masterkey = (wr[9] & 0b100) == 0;
+			boolean scope = (wr[11] & 0b10000) == 0;
+			boolean sight = (wr[11] & 0b100000) == 0;
+			boolean laser = (wr[12] & 0b1) == 0;
+			boolean lighthg = (wr[12] & 0b10) == 0;
+			boolean lightlg = (wr[11] & 0b10000000) == 0;
+			boolean grip = (wr[12] & 0b100) == 0;
 			wrCustom.addProperty("suppressor", suppressor);
 			wrCustom.addProperty("gp30", gp30);
 			wrCustom.addProperty("xm320", xm320);
@@ -638,8 +670,8 @@ public class Hosts {
 
 			JsonObject wrItems = new JsonObject();
 			weaponRestrictions.add("items", wrItems);
-			boolean envg = (wr[14] & 0x40) == 0;
-			boolean drum = (wr[13] & 0x4) == 0;
+			boolean envg = (wr[14] & 0b1000000) == 0;
+			boolean drum = (wr[13] & 0b100) == 0;
 			wrItems.addProperty("envg", envg);
 			wrItems.addProperty("drum", drum);
 
@@ -703,27 +735,26 @@ public class Hosts {
 			ruleSettings.add("scap", scap);
 			scap.addProperty("time", scapTime);
 			scap.addProperty("rounds", scapRounds);
-			boolean scapExtraTime = (extraTimeFlags & 1) == 0;
+			boolean scapExtraTime = (extraTimeFlags & 0b1) == 0;
 			scap.addProperty("extraTime", scapExtraTime);
 
 			JsonObject race = new JsonObject();
 			ruleSettings.add("race", race);
 			race.addProperty("time", raceTime);
 			race.addProperty("rounds", raceRounds);
-			boolean raceExtraTime = (extraTimeFlags & 4) == 0;
+			boolean raceExtraTime = (extraTimeFlags & 0b100) == 0;
 			race.addProperty("extraTime", raceExtraTime);
 
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("type", lobbySubtype);
-			data.add("settings", settings);
+			String json = Util.jsonEncode(settings);
+			hostSettings.setSettings(json);
 
-			JsonObject response = Campbell.instance().getResponse("hosts", "updateHostSettings", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while updating host settings: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4311, 2);
-				return;
-			}
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.saveOrUpdate(hostSettings);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.write(ctx, 0x4311, 0);
 		} catch (Exception e) {
@@ -732,88 +763,217 @@ public class Hosts {
 		}
 	}
 
-	public static void createGame(ChannelHandlerContext ctx, int lobbyId) {
+	public static void createGame(ChannelHandlerContext ctx, Lobby lobby) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
-			int chara = 0;
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("lobby", lobbyId);
-
-			JsonObject response = Campbell.instance().getResponse("hosts", "createGame", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while creating game: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while creating game: No User.");
 				Packets.writeError(ctx, 0x4317, 2);
 				return;
 			}
 
-			int id = response.get("game").getAsInt();
+			Character character = user.getCurrentCharacter();
+			List<CharacterHostSettings> settingsList = character.getHostSettings();
+			if (settingsList == null) {
+				settingsList = new ArrayList<>();
+				character.setHostSettings(settingsList);
+			}
 
-			HashMap<String, Object> settings = new HashMap<>();
-			settings.put("name", "Game " + id);
+			CharacterHostSettings hostSettings = settingsList.stream().filter((e) -> e.getType() == lobby.getSubtype())
+					.findFirst().orElse(null);
+			if (hostSettings == null) {
+				hostSettings = new CharacterHostSettings();
+				hostSettings.setCharacter(character);
+				hostSettings.setType(lobby.getSubtype());
+				hostSettings.setSettings(null);
 
-			// if (NGames.initialize(id, chara, settings) == null) {
-			// logger.error("Failed to initialize game instance.");
-			// Packets.writeError(ctx, 0x4317, 3);
-			// return;
-			// }
+				settingsList.add(hostSettings);
+			}
 
-			// NUsers.setGame(ctx, id);
+			JsonObject settings = Util.jsonDecode(hostSettings.getSettings());
+
+			String name = settings.get("name").getAsString();
+			String password = settings.get("password") != null && !settings.get("password").isJsonNull()
+					? settings.get("password").getAsString() : null;
+			int stance = settings.get("stance").getAsInt();
+			String comment = settings.get("comment").getAsString();
+
+			JsonArray games = settings.get("games").getAsJsonArray();
+			JsonObject common = settings.get("common").getAsJsonObject();
+			JsonObject ruleSettings = settings.get("ruleSettings").getAsJsonObject();
+
+			int maxPlayers = common.get("maxPlayers").getAsInt();
+
+			String jsonGames = Util.jsonEncode(games);
+			String jsonCommon = Util.jsonEncode(common);
+			String jsonRuleSettings = Util.jsonEncode(ruleSettings);
+
+			Game game = new Game();
+			game.setHost(character);
+			game.setLobby(lobby);
+			game.setName(name);
+			game.setPassword(password);
+			game.setComment(comment);
+			game.setMaxPlayers(maxPlayers);
+			game.setGames(jsonGames);
+			game.setCommon(jsonCommon);
+			game.setRules(jsonRuleSettings);
+
+			Player player = new Player();
+			player.setCharacter(character);
+			player.setGame(game);
+			character.setPlayer(Arrays.asList(player));
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(character);
+			session.save(game);
+			session.save(player);
+
+			session.refresh(game);
+			session.refresh(player);
+
+			Hibernate.initialize(game.getPlayers());
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			NGames.add(game);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
-			bo.writeInt(0).writeInt(id);
+			bo.writeInt(0).writeInt(game.getId());
 
 			Packets.write(ctx, 0x4317, bo);
 		} catch (Exception e) {
 			logger.error("Exception while creating game.", e);
-			Packets.writeError(ctx, 0x4317, 1);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4317, 1);
 		}
 	}
 
-	public static void playerChangedTeam(ChannelHandlerContext ctx, Packet in) {
+	public static void setPlayerTeam(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while setting player team: No user.");
+				Packets.writeError(ctx, 0x4345, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while setting player team: Not in a game.");
+				Packets.writeError(ctx, 0x4345, 2);
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while setting player team: Not the host.");
+				Packets.writeError(ctx, 0x4345, 2);
+				return;
+			}
+
 			ByteBuf bi = in.getPayload();
-			int playerId = bi.readInt();
+			int targetId = bi.readInt();
 			int team = bi.readByte();
+
+			List<Player> players = game.getPlayers();
+			Player target = players.stream().filter((e) -> e.getCharacterId() == targetId).findAny().orElse(null);
+			target.setTeam(team);
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(target);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
-			bo.writeInt(0).writeInt(playerId);
+			bo.writeInt(0).writeInt(targetId);
 
 			Packets.write(ctx, 0x4345, bo);
 		} catch (Exception e) {
-			logger.error("Exception while handling team join.", e);
-			Packets.writeError(ctx, 0x4345, 1);
+			logger.error("Exception while setting player team.", e);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4345, 1);
 		}
 	}
 
 	public static void playerConnected(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
-			int gameId = 0;
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while handling player connection: No user.");
+				Packets.writeError(ctx, 0x4341, 2);
+				return;
+			}
 
-			int chara = 0;
-			int host = 0;
-			if (chara != host) {
-				logger.error("Error while handling player connected: Not the host.");
-				Packets.writeError(ctx, 0x4341, 3);
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while handling player connection: Not in a game.");
+				Packets.writeError(ctx, 0x4341, 2);
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while handling player connection: Not the host.");
+				Packets.writeError(ctx, 0x4341, 2);
 				return;
 			}
 
 			ByteBuf bi = in.getPayload();
 			int targetId = bi.readInt();
 
-			ConcurrentMap<String, Object> target = null;
-			int gameJoining = (Integer) target.get("gameJoining");
-
-			if (gameJoining != gameId) {
-
+			User targetUser = NUsers.getByCharacterId(targetId);
+			if (targetUser == null) {
+				logger.error("Error while handling player connection: Target isn't online.");
+				Packets.writeError(ctx, 0x4341, 1);
+				return;
 			}
+
+			Character target = targetUser.getCurrentCharacter();
+			if (target == null) {
+				logger.error("Error while handling player connection: Target isn't online.");
+				Packets.writeError(ctx, 0x4341, 1);
+				return;
+			}
+
+			if (target.getGameJoining() != game.getId()) {
+				logger.error("Error while handling player connection: Player isn't joining this game.");
+				Packets.writeError(ctx, 0x4341, 1);
+				return;
+			}
+
+			Player targetPlayer = new Player();
+			targetPlayer.setCharacterId(target.getId());
+			targetPlayer.setCharacter(target);
+			targetPlayer.setGameId(game.getId());
+			targetPlayer.setGame(game);
+
+			game.getPlayers().add(targetPlayer);
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.saveOrUpdate(targetPlayer);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
@@ -821,45 +981,121 @@ public class Hosts {
 
 			Packets.write(ctx, 0x4341, bo);
 		} catch (Exception e) {
-			logger.error("Exception while handling player connected.", e);
-			Packets.writeError(ctx, 0x4341, 1);
+			logger.error("Exception while handling player connection.", e);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4341, 1);
 		}
 	}
 
 	public static void playerDisconnected(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while handling player connection: No user.");
+				Packets.writeError(ctx, 0x4343, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while handling player connection: Not in a game.");
+				Packets.writeError(ctx, 0x4343, 2);
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while handling player connection: Not the host.");
+				Packets.writeError(ctx, 0x4343, 2);
+				return;
+			}
+
 			ByteBuf bi = in.getPayload();
-			int playerId = bi.readInt();
+			int targetId = bi.readInt();
+
+			User targetUser = NUsers.getByCharacterId(targetId);
+			if (targetUser == null) {
+				logger.error("Error while handling player connection: Target isn't online.");
+				Packets.writeError(ctx, 0x4343, 1);
+				return;
+			}
+
+			Character target = targetUser.getCurrentCharacter();
+			if (target == null) {
+				logger.error("Error while handling player disconnection: Target isn't online.");
+				Packets.writeError(ctx, 0x4343, 1);
+				return;
+			}
+			
+			Player targetPlayer = target.getPlayer().size() > 0 ? target.getPlayer().get(0) : null;
+			if (targetPlayer == null || targetPlayer.getGameId() != game.getId()) {
+				logger.error("Error while handling player disconnection: Target isn't in this game.");
+				Packets.writeError(ctx, 0x4343, 1);
+				return;
+			}
+			
+			game.getPlayers().remove(targetPlayer);
+			target.setPlayer(new ArrayList<>());
+			
+			session = DB.getSession();
+			session.beginTransaction();
+			
+			session.remove(player);
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
-			bo.writeInt(0).writeInt(playerId);
+			bo.writeInt(0).writeInt(target.getId());
 
 			Packets.write(ctx, 0x4343, bo);
 		} catch (Exception e) {
-			logger.error("Exception while handling player disconnected.", e);
-			Packets.writeError(ctx, 0x4343, 1);
+			logger.error("Exception while handling player disconnection.", e);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4343, 1);
 		}
 	}
 
 	public static void setGame(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int game = bi.readByte();
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("game", game);
-
-			JsonObject response = Campbell.instance().getResponse("hosts", "setGame", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while setting game: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4393, 2);
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while setting game: No user.");
 				return;
 			}
+
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while setting game: Not in a game.");
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while setting game: Not the host.");
+				return;
+			}
+
+			ByteBuf bi = in.getPayload();
+			int index = bi.readByte();
+
+			game.setCurrentGame(index);
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(game);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.write(ctx, 0x4393, 0);
 		} catch (Exception e) {
@@ -869,36 +1105,115 @@ public class Hosts {
 	}
 
 	public static void endGame(ChannelHandlerContext ctx) {
+		Session session = null;
 		try {
-			int gameId = 0;
-
-			int chara = 0;
-			int host = 0;
-			if (chara != host) {
-				logger.error("Error while ending game: Not the host.");
-				Packets.writeError(ctx, 0x4381, 3);
-				return;
-			}
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("game", gameId);
-
-			JsonObject response = Campbell.instance().getResponse("hosts", "endGame", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while ending game: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while ending game: No user.");
 				Packets.writeError(ctx, 0x4381, 2);
 				return;
 			}
 
-			// NUsers.setGame(ctx, 0);
-			// NGames.finalize(gameId);
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while ending game: Not in a game.");
+				Packets.writeError(ctx, 0x4381, 2);
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while ending game: Not the host.");
+				Packets.writeError(ctx, 0x4381, 2);
+				return;
+			}
+
+			List<Player> players = game.getPlayers();
+			for (Player aPlayer : players) {
+				User aUser = NUsers.getByCharacterId(aPlayer.getCharacterId());
+				Character aCharacter = aUser.getCurrentCharacter();
+				if (aCharacter != null) {
+					aCharacter.setPlayer(new ArrayList<>());
+				}
+			}
+			game.setPlayers(new ArrayList<>());
+			NGames.remove(game);
+			
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.remove(game);
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.write(ctx, 0x4381, 0);
 		} catch (Exception e) {
 			logger.error("Exception while ending game.", e);
+			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x4381, 1);
 		}
 	}
 
+	public static void pass(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
+		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while setting game: No user.");
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while passing game: Not in a game.");
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while passing game: Not the host.");
+				return;
+			}
+
+			ByteBuf bi = in.getPayload();
+			int hostId = bi.readInt();
+			int targetId = bi.readInt();
+			
+			User targetUser = NUsers.getByCharacterId(targetId);
+			if (targetUser == null) {
+				logger.error("Error while passing game: Target isn't online.");
+				return;
+			}
+
+			Character target = targetUser.getCurrentCharacter();
+			if (target == null) {
+				logger.error("Error while passing game: Target isn't online.");
+				return;
+			}
+			
+			game.setHostId(target.getId());
+			game.setHost(target);
+			character.setPlayer(new ArrayList<>());
+			
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(game);
+			session.remove(player);
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
+			
+			game.setHost(target);
+
+			Packets.write(ctx, 0x43a1, 0);
+		} catch (Exception e) {
+			logger.error("Exception while passing game.", e);
+			// Fail silently
+		}
+	}
+	
 }

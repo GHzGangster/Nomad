@@ -27,28 +27,28 @@ public class CharacterEquippedSkills {
 	private Character character;
 
 	@Column(name = "skill_1", nullable = false)
-	private Integer skill1;
+	private Integer skill1 = 0;
 	
 	@Column(name = "skill_2", nullable = false)
-	private Integer skill2;
+	private Integer skill2 = 0;
 	
 	@Column(name = "skill_3", nullable = false)
-	private Integer skill3;
+	private Integer skill3 = 0;
 	
 	@Column(name = "skill_4", nullable = false)
-	private Integer skill4;
+	private Integer skill4 = 0;
 	
 	@Column(name = "level_1", nullable = false)
-	private Integer level1;
+	private Integer level1 = 0;
 	
 	@Column(name = "level_2", nullable = false)
-	private Integer level2;
+	private Integer level2 = 0;
 	
 	@Column(name = "level_3", nullable = false)
-	private Integer level3;
+	private Integer level3 = 0;
 	
 	@Column(name = "level_4", nullable = false)
-	private Integer level4;
+	private Integer level4 = 0;
 	
 	public CharacterEquippedSkills() {
 

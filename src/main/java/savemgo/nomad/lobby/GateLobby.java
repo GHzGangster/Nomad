@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.NomadLobby;
+import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.helper.Hub;
 import savemgo.nomad.packet.Packet;
 
@@ -14,8 +15,8 @@ public class GateLobby extends NomadLobby {
 
 	private static final Logger logger = LogManager.getLogger(GateLobby.class);
 
-	public GateLobby(int id) {
-		super(id, 0, 0);
+	public GateLobby(Lobby lobby) {
+		super(lobby);
 	}
 
 	@Override

@@ -62,12 +62,6 @@ public class User {
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "user", orphanRemoval = true)
 	private List<Character> characters;
 
-	@Transient
-	private int game = 0;
-
-	@Transient
-	private int gameJoining = 0;
-
 	public User() {
 
 	}
@@ -181,22 +175,6 @@ public class User {
 
 	public void setCharacters(List<Character> characters) {
 		this.characters = characters;
-	}
-
-	public int getGame() {
-		return game;
-	}
-
-	public void setGame(int game) {
-		this.game = game;
-	}
-
-	public int getGameJoining() {
-		return gameJoining;
-	}
-
-	public void setGameJoining(int gameJoining) {
-		this.gameJoining = gameJoining;
 	}
 
 }

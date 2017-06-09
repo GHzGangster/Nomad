@@ -15,10 +15,15 @@ import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
+import savemgo.nomad.entity.Character;
+import savemgo.nomad.entity.ConnectionInfo;
 import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.Player;
+import savemgo.nomad.entity.User;
+import savemgo.nomad.instances.NGames;
+import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -59,7 +64,7 @@ public class Games {
 		}
 	}
 
-	public static void getList(ChannelHandlerContext ctx, int lobby, int command) {
+	public static void getList(ChannelHandlerContext ctx, Lobby lobby, int command) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
 		Session session = null;
 		try {
@@ -68,8 +73,8 @@ public class Games {
 
 			Query<Game> query = session
 					.createQuery("from Game as g left join fetch g.host left join fetch g.players as p "
-							+ "left join fetch p.character where g.lobbyId=:lobbyId", Game.class);
-			query.setParameter("lobbyId", lobby);
+							+ "left join fetch p.character where g.lobby=:lobby", Game.class);
+			query.setParameter("lobby", lobby);
 			List<Game> games = query.list();
 
 			session.getTransaction().commit();
@@ -173,7 +178,7 @@ public class Games {
 		}
 	}
 
-	public static void getDetails(ChannelHandlerContext ctx, Packet in, int lobbyId) {
+	public static void getDetails(ChannelHandlerContext ctx, Packet in, Lobby lobby) {
 		ByteBuf bo = null;
 		Session session = null;
 		try {
@@ -189,7 +194,7 @@ public class Games {
 			query.setParameter("gameId", gameId);
 
 			Game game = query.uniqueResult();
-			
+
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
@@ -450,7 +455,7 @@ public class Games {
 
 			wr[14] |= !envg ? 0b1000000 : 0;
 
-			int lobbySubtype = 8;
+			int lobbySubtype = lobby.getSubtype();
 
 			bo = ctx.alloc().directBuffer(0x36d);
 
@@ -507,51 +512,73 @@ public class Games {
 	public static void join(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
 		try {
-			ByteBuf bi = in.getPayload();
-			int gameId = bi.readInt();
-			String password = Util.readString(bi, 16);
-
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.addProperty("game", gameId);
-			data.addProperty("password", password);
-
-			JsonObject response = Campbell.instance().getResponse("games", "getHostConnectionInfo", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while joining game: " + Campbell.getResult(response));
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while joining game: No user.");
 				Packets.writeError(ctx, 0x4321, 2);
 				return;
 			}
 
-			String publicIp = response.get("publicIp").getAsString();
-			int publicPort = response.get("publicPort").getAsInt();
-			String privateIp = response.get("privateIp").getAsString();
-			int privatePort = response.get("privatePort").getAsInt();
-			int rule = response.get("rule").getAsInt();
-			int map = response.get("map").getAsInt();
+			Character character = user.getCurrentCharacter();
+			
+			ByteBuf bi = in.getPayload();
+			int gameId = bi.readInt();
+			String password = Util.readString(bi, 16);
 
-			// NUsers.setGameJoining(ctx, gameId);
+			Game game = NGames.get(gameId);
+			if (game == null) {
+				logger.error("Error while joining game: No game.");
+				Packets.writeError(ctx, 0x4321, 3);
+				return;
+			}
+			
+			List<ConnectionInfo> connectionInfoList = game.getHost().getConnectionInfo();
+			if (connectionInfoList.size() <= 0) {
+				logger.error("Error while joining game: No connection info.");
+				Packets.writeError(ctx, 0x4321, 4);
+				return;
+			}
+			ConnectionInfo connectionInfo = connectionInfoList.get(0);
+
+			String jsonGames = game.getGames();
+			
+			JsonArray games = Util.jsonDecodeArray(jsonGames);
+			JsonArray mapRule = games.get(game.getCurrentGame()).getAsJsonArray();
+			
+			int rule = mapRule.get(0).getAsInt();
+			int map = mapRule.get(1).getAsInt();
+			
+			character.setGameJoining(game.getId());
+			logger.debug("Character game joining: {}", character.getGameJoining());
 
 			bo = ctx.alloc().directBuffer(0x2b);
 
 			bo.writeInt(0);
-			Util.writeString(publicIp, 16, bo);
-			bo.writeShort(publicPort);
-			Util.writeString(privateIp, 16, bo);
-			bo.writeShort(privatePort);
+			Util.writeString(connectionInfo.getPublicIp(), 16, bo);
+			bo.writeShort(connectionInfo.getPublicPort());
+			Util.writeString(connectionInfo.getPrivateIp(), 16, bo);
+			bo.writeShort(connectionInfo.getPrivatePort());
 			bo.writeByte(0).writeByte(rule).writeByte(map);
 
 			Packets.write(ctx, 0x4321, bo);
 		} catch (Exception e) {
-			logger.error("Exception while getting joining game.", e);
-			Packets.writeError(ctx, 0x4321, 1);
+			logger.error("Exception while joining game.", e);
 			Util.releaseBuffer(bo);
+			Packets.writeError(ctx, 0x4321, 1);
 		}
 	}
 
 	public static void joinFailed(ChannelHandlerContext ctx, Packet in) {
 		try {
-			// NUsers.setGameJoining(ctx, 0);
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while handling join failed: No user.");
+				Packets.writeError(ctx, 0x4323, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			character.setGameJoining(null);
 
 			Packets.write(ctx, 0x4323, 0);
 		} catch (Exception e) {

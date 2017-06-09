@@ -13,6 +13,7 @@ import javax.persistence.JoinColumn;
 import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Transient;
 
 @Entity
 @Table(name = "mgo2_characters")
@@ -51,43 +52,49 @@ public class Character {
 	@Column(name = "lobby", nullable = true, insertable = false, updatable = false)
 	private Integer lobbyId = 0;
 
-	@JoinColumn(name = "lobby")
+	@JoinColumn(name = "lobby", nullable = true)
 	@OneToOne(fetch = FetchType.LAZY)
 	private Lobby lobby;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterAppearance> appearance;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterBlocked> blocked;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterChatMacro> chatMacros;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
-	private List<ConnectionInfo> connectionInfo;
-
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
-	private List<CharacterFriend> friends;
-
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
-	private List<CharacterHostSettings> hostSettings;
-
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterEquippedSkills> skills;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterFriend> friends;
+
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<CharacterHostSettings> hostSettings;
+
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterSetGear> setsGear;
 
-	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character", orphanRemoval = true)
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterSetSkills> setsSkills;
 
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<ConnectionInfo> connectionInfo;
+	
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<Player> player;
+	
 	// OneToOne isn't working lazily, use OneToMany for now
 	// @JoinColumn(name = "id")
 	// @LazyToOne(LazyToOneOption.PROXY)
 	// @OneToOne(fetch = FetchType.LAZY, mappedBy = "character", optional =
 	// false)
 	// private CharacterAppearance appearance;
+
+	@Transient
+	private Integer gameJoining = null;
 
 	public Character() {
 
@@ -265,4 +272,20 @@ public class Character {
 		this.lobby = lobby;
 	}
 
+	public Integer getGameJoining() {
+		return gameJoining;
+	}
+
+	public void setGameJoining(Integer gameJoining) {
+		this.gameJoining = gameJoining;
+	}
+
+	public List<Player> getPlayer() {
+		return player;
+	}
+
+	public void setPlayer(List<Player> player) {
+		this.player = player;
+	}
+	
 }

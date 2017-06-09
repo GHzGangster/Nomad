@@ -1,5 +1,7 @@
 package savemgo.nomad.helper;
 
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -14,6 +16,7 @@ import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.News;
+import savemgo.nomad.instances.NLobbies;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -24,23 +27,18 @@ public class Hub {
 
 	public static void getGameLobbyInfo(ChannelHandlerContext ctx) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
-		Session session = null;
 		try {
-			session = DB.getSession();
-			session.beginTransaction();
-
-			Query<Lobby> query = session.createQuery("from Lobby", Lobby.class);
-			List<Lobby> lobbies = query.list();
-
-			session.getTransaction().commit();
-			DB.closeSession(session);
-
+			Collection<Lobby> lobbies = NLobbies.get().values();
+			Iterator<Lobby> iterator = lobbies.iterator();
+			
 			Packets.handleMutliElementPayload(ctx, lobbies.size(), 8, 0x23, payloads, (i, bo) -> {
-				Lobby lobby = lobbies.get(i);
+				Lobby lobby = iterator.next();
 
 				int unk1 = 0;
 
-				int attributes = (lobby.getSubtype() << 24) | unk1;
+				int attributes = 0;
+				attributes |= unk1;
+				attributes |= (lobby.getSubtype() & 0xff) << 24;
 				int openTime = 0, closeTime = 0, isOpen = 1;
 
 				bo.writeInt(i).writeInt(attributes).writeShort(lobby.getId());
@@ -53,7 +51,6 @@ public class Hub {
 			Packets.write(ctx, 0x4903, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting game lobby info.", e);
-			DB.rollbackAndClose(session);
 			Util.releaseBuffers(payloads);
 			Packets.writeError(ctx, 0x4901, 1);
 		}
@@ -61,32 +58,19 @@ public class Hub {
 
 	public static void getLobbyList(ChannelHandlerContext ctx) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
-		Session session = null;
 		try {
-			session = DB.getSession();
-			session.beginTransaction();
-
-			Query<Lobby> query = session.createQuery("from Lobby", Lobby.class);
-			List<Lobby> lobbies = query.list();
-
-			session.getTransaction().commit();
-			DB.closeSession(session);
+			Collection<Lobby> lobbies = NLobbies.get().values();
+			Iterator<Lobby> iterator = lobbies.iterator();
 
 			Packets.handleMutliElementPayload(ctx, lobbies.size(), 22, 0x2e, payloads, (i, bo) -> {
-				Lobby lobby = lobbies.get(i);
+				Lobby lobby = iterator.next();
 
-				int beginner = 0, expansion = 0, noHeadshot = 0;
+				boolean beginner = false, expansion = false, noHeadshot = false;
 
 				int restriction = 0;
-				if (beginner == 1) {
-					restriction += 2;
-				}
-				if (expansion == 1) {
-					restriction += 8;
-				}
-				if (noHeadshot == 1) {
-					restriction += 16;
-				}
+				restriction |= beginner ? 0b1 : 0;
+				restriction |= expansion ? 0b1000 : 0;
+				restriction |= noHeadshot ? 0b10000 : 0;
 
 				bo.writeInt(i).writeInt(lobby.getType());
 				Util.writeString(lobby.getName(), 16, bo);
@@ -100,7 +84,6 @@ public class Hub {
 			Packets.write(ctx, 0x2004, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting lobby list.", e);
-			DB.rollbackAndClose(session);
 			Util.releaseBuffers(payloads);
 			Packets.writeError(ctx, 0x2002, 1);
 		}

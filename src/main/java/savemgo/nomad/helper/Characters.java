@@ -15,7 +15,6 @@ import org.hibernate.Session;
 import org.hibernate.query.Query;
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
@@ -32,7 +31,7 @@ import savemgo.nomad.entity.CharacterSetGear;
 import savemgo.nomad.entity.CharacterSetSkills;
 import savemgo.nomad.entity.ConnectionInfo;
 import savemgo.nomad.entity.User;
-import savemgo.nomad.instance.NUsers;
+import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -507,7 +506,7 @@ public class Characters {
 			Character character = user.getCurrentCharacter();
 
 			List<CharacterChatMacro> macros = character.getChatMacros();
-			if (macros == null) {
+			if (macros.size() <= 0) {
 				macros = new ArrayList<CharacterChatMacro>();
 				character.setChatMacros(macros);
 				for (int typem = 0; typem < 2; typem++) {
@@ -560,7 +559,14 @@ public class Characters {
 
 			Character character = user.getCurrentCharacter();
 			CharacterAppearance appearance = character.getAppearance().get(0);
-			CharacterEquippedSkills skills = character.getSkills().get(0);
+
+			List<CharacterEquippedSkills> skillsList = character.getSkills();
+			if (skillsList.size() <= 0) {
+				CharacterEquippedSkills skills = new CharacterEquippedSkills();
+				skills.setCharacter(character);
+				skillsList.add(skills);
+			}
+			CharacterEquippedSkills skills = skillsList.get(0);
 
 			int clanId = 0;
 			String clanName = "";
@@ -599,7 +605,11 @@ public class Characters {
 			bo.writeInt(skillExp).writeInt(skillExp).writeInt(skillExp).writeInt(skillExp).writeZero(5);
 
 			bo.writeInt(rwd);
-			Util.writeString(character.getComment(), 128, bo);
+			if (character.getComment() != null) {
+				Util.writeString(character.getComment(), 128, bo);
+			} else {
+				bo.writeZero(128);
+			}
 			bo.writeInt(0).writeByte(character.getRank()).writeBytes(bytes3);
 
 			Packets.write(ctx, 0x4122, bo);
@@ -629,7 +639,14 @@ public class Characters {
 
 			Character character = user.getCurrentCharacter();
 			CharacterAppearance appearance = character.getAppearance().get(0);
-			CharacterEquippedSkills skills = character.getSkills().get(0);
+
+			List<CharacterEquippedSkills> skillsList = character.getSkills();
+			if (skillsList.size() <= 0) {
+				CharacterEquippedSkills skills = new CharacterEquippedSkills();
+				skills.setCharacter(character);
+				skillsList.add(skills);
+			}
+			CharacterEquippedSkills skills = skillsList.get(0);
 
 			ByteBuf bi = in.getPayload();
 
@@ -701,7 +718,7 @@ public class Characters {
 
 			session.update(character);
 			session.update(appearance);
-			session.update(skills);
+			session.saveOrUpdate(skills);
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
@@ -1053,13 +1070,11 @@ public class Characters {
 			Character character = user.getCurrentCharacter();
 
 			List<ConnectionInfo> connectionInfos = character.getConnectionInfo();
-			if (connectionInfos == null) {
-				connectionInfos = new ArrayList<ConnectionInfo>();
+			if (connectionInfos.size() <= 0) {
 				ConnectionInfo info = new ConnectionInfo();
 				info.setCharacter(character);
-				character.setConnectionInfo(connectionInfos);
+				connectionInfos.add(info);
 			}
-
 			ConnectionInfo info = connectionInfos.get(0);
 
 			ByteBuf bi = in.getPayload();

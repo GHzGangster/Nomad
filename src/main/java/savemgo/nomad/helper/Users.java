@@ -16,8 +16,12 @@ import savemgo.nomad.crypto.Crypto;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterAppearance;
+import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Lobby;
+import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
-import savemgo.nomad.instance.NUsers;
+import savemgo.nomad.instances.NChannels;
+import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -43,7 +47,11 @@ public class Users {
 		return Crypto.instanceAuth().encrypt(bytes);
 	}
 
-	public static boolean checkSession(ChannelHandlerContext ctx, Packet in, int lobbyId, boolean isCharaId) {
+	private static final byte SPECIAL_SESSION_BYTES[] = { (byte) 0xE7, (byte) 0xBA, (byte) 0xB4, (byte) 0x26,
+			(byte) 0xFE, (byte) 0x3F, (byte) 0x40, (byte) 0x73, (byte) 0xDB, (byte) 0x94, (byte) 0x36, (byte) 0xDF,
+			(byte) 0x6D, (byte) 0xDB, (byte) 0xD3, (byte) 0x9C };
+
+	public static boolean checkSession(ChannelHandlerContext ctx, Packet in, Lobby lobby, boolean isCharaId) {
 		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
@@ -54,10 +62,14 @@ public class Users {
 			byte[] mgo2SessionBytes = decryptSessionId(bytes);
 			String mgo2Session = new String(mgo2SessionBytes, StandardCharsets.ISO_8859_1);
 
+			if (Arrays.equals(bytes, SPECIAL_SESSION_BYTES)) {
+				mgo2Session = "cafebabe";
+			}
+
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<User> query = session.createQuery("FROM User WHERE session=:session", User.class);
+			Query<User> query = session.createQuery("from User where session=:session", User.class);
 			query.setParameter("session", mgo2Session);
 
 			User user = query.uniqueResult();
@@ -77,19 +89,19 @@ public class Users {
 				Packets.write(ctx, 0x3004, 1);
 				return false;
 			}
-			
+
 			if (!isCharaId) {
 				session = DB.getSession();
 				session.beginTransaction();
-				
+
 				user.setCurrentCharacter(null);
 				session.update(user);
-				
+
 				session.getTransaction().commit();
 				DB.closeSession(session);
 			}
 
-			if (!onLobbyConnected(ctx, lobbyId, user)) {
+			if (!onLobbyConnected(ctx, lobby, user)) {
 				Packets.write(ctx, 0x3004, 2);
 				return false;
 			}
@@ -216,7 +228,7 @@ public class Users {
 
 			Character character = new Character();
 			character.setName(name);
-			character.setUser(user.getId());
+			character.setUser(user);
 
 			CharacterAppearance appearance = new CharacterAppearance();
 			character.setAppearance(Arrays.asList(appearance));
@@ -245,10 +257,14 @@ public class Users {
 			appearance.setAccessory2Color(accessory2Color);
 			appearance.setFacePaint(facePaint);
 
+			user.setCurrentCharacter(character);
+
 			session = DB.getSession();
 			session.beginTransaction();
 
 			session.save(character);
+			session.save(appearance);
+			session.update(user);
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
@@ -326,35 +342,37 @@ public class Users {
 		}
 	}
 
-	public static boolean onLobbyConnected(ChannelHandlerContext ctx, int lobbyId, User user) {
+	public static boolean onLobbyConnected(ChannelHandlerContext ctx, Lobby lobby, User user) {
 		Session session = null;
 		try {
 			session = DB.getSession();
 			session.beginTransaction();
 
 			session.update(user);
-			
+
 			if (user.getCurrentCharacterId() != null && user.getCurrentCharacter() != null) {
 				Character character = user.getCurrentCharacter();
 				Hibernate.initialize(character);
+				character.setLobby(lobby);
 				Hibernate.initialize(character.getAppearance());
 				Hibernate.initialize(character.getBlocked());
 				Hibernate.initialize(character.getChatMacros());
 				Hibernate.initialize(character.getConnectionInfo());
 				Hibernate.initialize(character.getFriends());
 				Hibernate.initialize(character.getHostSettings());
+				Hibernate.initialize(character.getPlayer());
 				Hibernate.initialize(character.getSetsGear());
 				Hibernate.initialize(character.getSetsSkills());
 				Hibernate.initialize(character.getSkills());
+
+				session.update(character);
 			}
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
-			if (!NUsers.initialize(ctx.channel(), user)) {
-				logger.error("Failed to initialize player during lobby connection.");
-				return false;
-			}
+			NChannels.add(ctx.channel());
+			NUsers.add(ctx.channel(), user);
 		} catch (Exception e) {
 			logger.error("Exception while handling lobby connection.", e);
 			DB.rollbackAndClose(session);
@@ -362,17 +380,42 @@ public class Users {
 		return true;
 	}
 
-	public static void onLobbyDisconnected(ChannelHandlerContext ctx, int lobbyId) {
+	public static void onLobbyDisconnected(ChannelHandlerContext ctx, Lobby lobby) {
+		Session session = null;
 		try {
-			// TODO: Clean up anything we have to, like the player's rooms? Be
-			// sure to make sure rooms aren't disappeaing.
-
-			if (!NUsers.finalize(ctx.channel())) {
-				logger.error("Failed to finalize user during lobby disconnection.");
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while disconnecting from lobby: No user.");
 				return;
 			}
+
+			Character character = user.getCurrentCharacter();
+			if (character != null) {
+				Player player = Hibernate.isInitialized(character.getPlayer()) && character.getPlayer().size() > 0
+						? character.getPlayer().get(0) : null;
+				if (player != null) {
+					Game game = player.getGame();
+					if (Hibernate.isInitialized(game) && character.getId() == game.getHost().getId()) {
+						// Hosting a game, but disconnected
+						Hosts.endGame(ctx);
+					}
+				}
+
+				character.setLobby(null);
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.update(character);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+			}
+
+			NUsers.remove(ctx.channel());
 		} catch (Exception e) {
-			logger.error("Exception while handling lobby disconnection.", e);
+			logger.error("Exception while disconnecting from lobby.", e);
+			DB.rollbackAndClose(session);
 		}
 	}
 

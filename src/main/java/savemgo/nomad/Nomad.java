@@ -17,6 +17,8 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Lobby;
+import savemgo.nomad.instances.NLobbies;
 import savemgo.nomad.lobby.AccountLobby;
 import savemgo.nomad.lobby.GameLobby;
 import savemgo.nomad.lobby.GateLobby;
@@ -27,8 +29,8 @@ public class Nomad {
 
 	private EventLoopGroup bossGroup, workerGroup;
 
-	private NomadLobby gateLobby, accountLobby, gameLobby;
-
+	public static boolean bindOnAllIPs = false;
+	
 	public static void testHibernate() {
 		Session session = DB.getSession();
 		session.beginTransaction();
@@ -38,7 +40,7 @@ public class Nomad {
 
 		games.size();
 		Game game = games.get(0);
-		
+
 		Hibernate.initialize(game.getPlayers());
 
 		session.getTransaction().commit();
@@ -72,52 +74,49 @@ public class Nomad {
 
 		logger.info("Starting server...");
 
+		Session session = null;
 		try {
+			Lobby lobbyGateNa = null, lobbyAccount = null, lobbyGame = null;
+
+			session = DB.getSession();
+			session.beginTransaction();
+			
+			lobbyGateNa = session.get(Lobby.class, 1);
+			lobbyAccount = session.get(Lobby.class, 2);
+			lobbyGame = session.get(Lobby.class, 3);
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
+			
+			NLobbies.add(lobbyGateNa);
+			NLobbies.add(lobbyAccount);
+			NLobbies.add(lobbyGame);
+			
 			bossGroup = new NioEventLoopGroup(1);
 			workerGroup = new NioEventLoopGroup();
 
-			int workersPerServer = 64;
+			NomadServer serverGateNa = new NomadServer(new GateLobby(lobbyGateNa), bossGroup, workerGroup, 64);
+			NomadServer serverAccount = new NomadServer(new AccountLobby(lobbyAccount), bossGroup, workerGroup, 64);
+			NomadServer serverGame = new NomadServer(new GameLobby(lobbyGame), bossGroup, workerGroup, 64);
 
-			gateLobby = new GateLobby(1);
-			accountLobby = new AccountLobby(2);
-			gameLobby = new GameLobby(36);
-
-			// NomadServer serverGate = new NomadServer(gateLobby, "0.0.0.0",
-			// 15731, bossGroup, workerGroup,
-			// workersPerServer);
-			NomadServer serverGateNa = new NomadServer(gateLobby, "0.0.0.0", 15731, bossGroup, workerGroup,
-					workersPerServer);
-			NomadServer serverAccount = new NomadServer(accountLobby, "0.0.0.0", 5732, bossGroup, workerGroup,
-					workersPerServer);
-			NomadServer serverGame = new NomadServer(gameLobby, "0.0.0.0", 5733, bossGroup, workerGroup);
-
-			// serverGate.start();
 			serverGateNa.start();
 			serverAccount.start();
 			serverGame.start();
 
 			logger.info("Started server.");
 
-			ChannelFuture future = serverGateNa.getFuture();
+			ChannelFuture future = serverGame.getFuture();
 
 			try {
 				future.sync();
 
-				// Campbell.instance().getResponse("nomad", "onStart");
-
-				NomadService service = new NomadService();
-				service.start(() -> {
-					// Campbell.instance().getResponse("nomad",
-					// "updateLobbyCounts");
-					return true;
-				}, 60);
-
 				future.channel().closeFuture().sync();
-
-				// Campbell.instance().getResponse("nomad", "onStop");
 			} catch (Exception e) {
 				logger.error(e);
 			}
+		} catch (Exception e) {
+			logger.error("Exception while starting server.", e);
+			DB.rollbackAndClose(session);
 		} finally {
 			logger.info("Shutting down server...");
 
