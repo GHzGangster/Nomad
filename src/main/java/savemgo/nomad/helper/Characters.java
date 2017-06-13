@@ -468,8 +468,22 @@ public class Characters {
 				return;
 			}
 
-			List<CharacterChatMacro> macros = user.getCurrentCharacter().getChatMacros();
-
+			Character character = user.getCurrentCharacter();
+			
+			List<CharacterChatMacro> macros = character.getChatMacros();
+			if (macros.size() <= 0) {
+				for (int typem = 0; typem < 2; typem++) {
+					for (int index = 0; index < 12; index++) {
+						CharacterChatMacro macro = new CharacterChatMacro();
+						macro.setCharacterId(character.getId());
+						macro.setCharacter(character);
+						macro.setType(typem);
+						macro.setIndex(index);
+						macros.add(macro);
+					}
+				}
+			}
+			
 			bos = new ByteBuf[2];
 			for (int i = 0; i < bos.length; i++) {
 				bos[i] = ctx.alloc().directBuffer(0x301);
@@ -506,23 +520,10 @@ public class Characters {
 			Character character = user.getCurrentCharacter();
 
 			List<CharacterChatMacro> macros = character.getChatMacros();
-			if (macros.size() <= 0) {
-				macros = new ArrayList<CharacterChatMacro>();
-				character.setChatMacros(macros);
-				for (int typem = 0; typem < 2; typem++) {
-					for (int index = 0; index < 12; index++) {
-						CharacterChatMacro macro = new CharacterChatMacro();
-						macro.setCharacter(character);
-						macro.setType(typem);
-						macro.setIndex(index);
-					}
-				}
-			}
-
 			for (int i = 0; i < 12; i++) {
 				final int index = i;
 				CharacterChatMacro macro = macros.stream().filter((e) -> e.getIndex() == index && e.getType() == type)
-						.findFirst().orElse(null);
+						.findAny().orElse(null);
 				String text = Util.readString(bi, 64);
 				macro.setText(text);
 			}
@@ -531,7 +532,7 @@ public class Characters {
 			session.beginTransaction();
 
 			for (CharacterChatMacro macro : macros) {
-				session.update(macro);
+				session.saveOrUpdate(macro);
 			}
 
 			session.getTransaction().commit();
@@ -744,6 +745,7 @@ public class Characters {
 			Packets.write(ctx, 0x4131, bo);
 		} catch (Exception e) {
 			logger.error("Exception while updating personal info.", e);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
 			Packets.writeError(ctx, 0x4131, 1);
 		}
@@ -947,15 +949,36 @@ public class Characters {
 			}
 
 			Character character = user.getCurrentCharacter();
+
 			List<CharacterSetGear> sets = character.getSetsGear();
-			if (sets == null) {
-				sets = new ArrayList<CharacterSetGear>();
+			if (sets.size() <= 0) {
 				for (int index = 0; index < 3; index++) {
 					CharacterSetGear set = new CharacterSetGear();
+					set.setCharacterId(character.getId());
 					set.setCharacter(character);
 					set.setIndex(index);
+					set.setFace(0);
+					set.setHead(0);
+					set.setHeadColor(0);
+					set.setUpper(0);
+					set.setUpperColor(0);
+					set.setLower(0);
+					set.setLowerColor(0);
+					set.setChest(0);
+					set.setChestColor(0);
+					set.setWaist(0);
+					set.setWaistColor(0);
+					set.setHands(0);
+					set.setHandsColor(0);
+					set.setFeet(0);
+					set.setFeetColor(0);
+					set.setAccessory1(0);
+					set.setAccessory1Color(0);
+					set.setAccessory2(0);
+					set.setAccessory2Color(0);
+					set.setFacePaint(0);
+					sets.add(set);
 				}
-				character.setSetsGear(sets);
 			}
 
 			bo = ctx.alloc().directBuffer(0x57 * sets.size());
@@ -981,12 +1004,24 @@ public class Characters {
 	}
 
 	public static void updateGearSets(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while updating gear sets: No User.");
+				Packets.writeError(ctx, 0x4143, 2);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			
+			List<CharacterSetGear> sets = character.getSetsGear();
+
 			ByteBuf bi = in.getPayload();
 
-			JsonArray gearSets = new JsonArray();
-
 			for (int i = 0; i < 3; i++) {
+				CharacterSetGear set = sets.get(0);
+				
 				int stages = bi.readInt();
 				int face = bi.readUnsignedByte();
 				int head = bi.readUnsignedByte();
@@ -1010,49 +1045,44 @@ public class Characters {
 				int facePaint = bi.readUnsignedByte();
 				String name = Util.readString(bi, 63, StandardCharsets.UTF_8);
 
-				JsonObject gearSet = new JsonObject();
-				gearSets.add(gearSet);
-				gearSet.addProperty("name", name);
-				gearSet.addProperty("stages", stages);
-
-				JsonObject gear = new JsonObject();
-				gearSet.add("gear", gear);
-				gear.addProperty("face", face);
-				gear.addProperty("head", head);
-				gear.addProperty("headColor", headColor);
-				gear.addProperty("upper", upper);
-				gear.addProperty("upperColor", upperColor);
-				gear.addProperty("lower", lower);
-				gear.addProperty("lowerColor", lowerColor);
-				gear.addProperty("chest", chest);
-				gear.addProperty("chestColor", chestColor);
-				gear.addProperty("waist", waist);
-				gear.addProperty("waistColor", waistColor);
-				gear.addProperty("hands", hands);
-				gear.addProperty("handsColor", handsColor);
-				gear.addProperty("feet", feet);
-				gear.addProperty("feetColor", feetColor);
-				gear.addProperty("accessory1", accessory1);
-				gear.addProperty("accessory1Color", accessory1Color);
-				gear.addProperty("accessory2", accessory2);
-				gear.addProperty("accessory2Color", accessory2Color);
-				gear.addProperty("facePaint", facePaint);
+				set.setName(name);
+				set.setStages(stages);
+				set.setFace(face);
+				set.setHead(head);
+				set.setUpper(upper);
+				set.setLower(lower);
+				set.setChest(chest);
+				set.setWaist(waist);
+				set.setHands(hands);
+				set.setFeet(feet);
+				set.setAccessory1(accessory1);
+				set.setAccessory2(accessory2);
+				set.setHeadColor(headColor);
+				set.setUpperColor(upperColor);
+				set.setLowerColor(lowerColor);
+				set.setChestColor(chestColor);
+				set.setWaistColor(waistColor);
+				set.setHandsColor(handsColor);
+				set.setFeetColor(feetColor);
+				set.setAccessory1Color(accessory1Color);
+				set.setAccessory2Color(accessory2Color);
+				set.setFacePaint(facePaint);				
 			}
 
-			JsonObject data = new JsonObject();
-			data.addProperty("session", "");
-			data.add("gearSets", gearSets);
-
-			JsonObject response = Campbell.instance().getResponse("characters", "updateGearSets", data);
-			if (!Campbell.checkResult(response)) {
-				logger.error("Error while updating gear sets: " + Campbell.getResult(response));
-				Packets.writeError(ctx, 0x4143, 2);
-				return;
+			session = DB.getSession();
+			session.beginTransaction();
+			
+			for (CharacterSetGear set : sets) {
+				session.saveOrUpdate(set);
 			}
-
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
+			
 			Packets.write(ctx, 0x4143, 0);
 		} catch (Exception e) {
 			logger.error("Exception while updating gear sets.", e);
+			DB.rollbackAndClose(session);
 			Packets.writeError(ctx, 0x4143, 1);
 		}
 	}
@@ -1137,6 +1167,7 @@ public class Characters {
 				for (CharacterFriend friend : friends) {
 					session.update(friend);
 					Hibernate.initialize(friend.getTarget());
+					Hibernate.initialize(friend.getTarget().getLobby());
 				}
 
 				session.getTransaction().commit();
@@ -1164,6 +1195,7 @@ public class Characters {
 				for (CharacterBlocked block : blocked) {
 					session.update(block);
 					Hibernate.initialize(block.getTarget());
+					Hibernate.initialize(block.getTarget().getLobby());
 				}
 
 				session.getTransaction().commit();
@@ -1253,17 +1285,20 @@ public class Characters {
 				List<CharacterFriend> friends = character.getFriends();
 
 				CharacterFriend friend = new CharacterFriend();
+				friend.setCharacterId(character.getId());
 				friend.setCharacter(character);
+				friend.setTargetId(target.getId());
 				friend.setTarget(target);
 
 				session.saveOrUpdate(friend);
-				session.refresh(friend);
 				friends.add(friend);
 			} else {
 				List<CharacterBlocked> blocked = character.getBlocked();
 
 				CharacterBlocked block = new CharacterBlocked();
+				block.setCharacterId(character.getId());
 				block.setCharacter(character);
+				block.setTargetId(target.getId());
 				block.setTarget(target);
 
 				session.saveOrUpdate(block);

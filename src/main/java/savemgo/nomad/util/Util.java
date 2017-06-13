@@ -2,6 +2,7 @@ package savemgo.nomad.util;
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
@@ -17,6 +18,7 @@ import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.CharsetUtil;
 
 public class Util {
@@ -32,15 +34,15 @@ public class Util {
 	public static JsonObject jsonDecode(String json) {
 		return GSON.fromJson(json, JsonObject.class);
 	}
-	
+
 	public static JsonArray jsonDecodeArray(String json) {
 		return GSON.fromJson(json, JsonArray.class);
 	}
-	
+
 	public static String jsonEncode(JsonElement elem) {
 		return GSON.toJson(elem);
 	}
-	
+
 	@SuppressWarnings({ "unchecked" })
 	public static <T> T cast(Object obj) {
 		return (T) obj;
@@ -210,6 +212,10 @@ public class Util {
 		if (buffer != null && buffer.refCnt() > 0) {
 			buffer.release(buffer.refCnt());
 		}
+	}
+
+	public static String getIp(ChannelHandlerContext ctx) {
+		return ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress().getHostAddress();
 	}
 
 }

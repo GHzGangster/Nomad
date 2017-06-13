@@ -1,5 +1,7 @@
 package savemgo.nomad.packet;
 
+import java.net.InetSocketAddress;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -35,10 +37,10 @@ public class PacketEncoder extends ChannelOutboundHandlerAdapter {
 			final Packet fPacket = packet;
 
 			if (lenP > 0) {
-				logger.debug("Out - Command {} - {} bytes", String.format("%04x", command), lenP);
+				logger.debug("{} - Out - Command {} - {} bytes", Util.getIp(ctx), String.format("%04x", command), lenP);
 				logger.debug(() -> ByteBufUtil.hexDump(fPacket.getPayload()));
 			} else {
-				logger.debug("Out - Command {}", String.format("%04x", command));
+				logger.debug("{} - Out - Command {}", Util.getIp(ctx), String.format("%04x", command));
 			}
 
 			int pad = 0;

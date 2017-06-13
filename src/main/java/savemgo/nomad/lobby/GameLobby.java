@@ -165,17 +165,16 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4346:
-			// Player Kicked
-			logger.error("Player Kicked not implemented.");
+			Hosts.kickPlayer(ctx, in);
 			break;
 
 		case 0x4380:
-			Hosts.endGame(ctx);
+			Hosts.quitGame(ctx);
 			break;
 
 		case 0x4390:
 			// Stats
-			Packets.write(ctx, 0x4391, 0);
+			Packets.write(ctx, 0x4391);
 			break;
 
 		case 0x4394:

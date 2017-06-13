@@ -7,12 +7,12 @@
 	</Appenders>
 	<Loggers>
 		<Logger name="io.netty" level="ERROR" />
-		<Logger name="org.hibernate" level="DEBUG" />
+		<Logger name="org.hibernate" level="ERROR" />
 		<Logger name="com.mchange" level="ERROR" />
-		<Logger name="com.mchange.v2.c3p0" level="INFO">
+		<Logger name="com.mchange.v2.c3p0" level="ERROR">
 			<AppenderRef ref="Console" />
 		</Logger>
-		<Logger name="com.mchange.v2.resourcepool" level="INFO">
+		<Logger name="com.mchange.v2.resourcepool" level="ERROR">
 			<AppenderRef ref="Console" />
 		</Logger>
 		<Root level="DEBUG">

@@ -808,10 +808,12 @@ public class Hosts {
 
 			String jsonGames = Util.jsonEncode(games);
 			String jsonCommon = Util.jsonEncode(common);
-			String jsonRuleSettings = Util.jsonEncode(ruleSettings);
-
+			String jsonRuleSettings = Util.jsonEncode(ruleSettings);			
+			
 			Game game = new Game();
+			game.setHostId(character.getId());
 			game.setHost(character);
+			game.setLobbyId(lobby.getId());
 			game.setLobby(lobby);
 			game.setName(name);
 			game.setPassword(password);
@@ -820,27 +822,28 @@ public class Hosts {
 			game.setGames(jsonGames);
 			game.setCommon(jsonCommon);
 			game.setRules(jsonRuleSettings);
-
+			
 			Player player = new Player();
+			player.setCharacterId(character.getId());
 			player.setCharacter(character);
-			player.setGame(game);
-			character.setPlayer(Arrays.asList(player));
+			player.setGame(game);			
 
 			session = DB.getSession();
 			session.beginTransaction();
 
-			session.update(character);
 			session.save(game);
 			session.save(player);
-
-			session.refresh(game);
-			session.refresh(player);
-
-			Hibernate.initialize(game.getPlayers());
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
+			ArrayList<Player> players = new ArrayList<>();
+			players.add(player);
+			player.setGameId(game.getId());
+			
+			character.setPlayer(Arrays.asList(player));
+			game.setPlayers(players);
+			
 			NGames.add(game);
 
 			bo = ctx.alloc().directBuffer(0x8);
@@ -876,7 +879,7 @@ public class Hosts {
 			}
 
 			Game game = player.getGame();
-			if (character.getId() != game.getHost().getId()) {
+			if (character.getId() != game.getHostId()) {
 				logger.error("Error while setting player team: Not the host.");
 				Packets.writeError(ctx, 0x4345, 2);
 				return;
@@ -965,8 +968,6 @@ public class Hosts {
 			targetPlayer.setGameId(game.getId());
 			targetPlayer.setGame(game);
 
-			game.getPlayers().add(targetPlayer);
-
 			session = DB.getSession();
 			session.beginTransaction();
 
@@ -974,6 +975,9 @@ public class Hosts {
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
+			
+			target.setPlayer(Arrays.asList(targetPlayer));
+			game.getPlayers().add(targetPlayer);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
@@ -992,10 +996,17 @@ public class Hosts {
 		ByteBuf bo = null;
 		Session session = null;
 		try {
+			ByteBuf bi = in.getPayload();
+			int targetId = bi.readInt();
+			
+			bo = ctx.alloc().directBuffer(0x8);
+			bo.writeInt(0).writeInt(targetId);
+
+			Packets.write(ctx, 0x4343, bo);
+			
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while handling player connection: No user.");
-				Packets.writeError(ctx, 0x4343, 2);
 				return;
 			}
 
@@ -1003,65 +1014,116 @@ public class Hosts {
 			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
 			if (player == null) {
 				logger.error("Error while handling player connection: Not in a game.");
-				Packets.writeError(ctx, 0x4343, 2);
 				return;
 			}
 
 			Game game = player.getGame();
 			if (character.getId() != game.getHost().getId()) {
 				logger.error("Error while handling player connection: Not the host.");
-				Packets.writeError(ctx, 0x4343, 2);
 				return;
-			}
-
-			ByteBuf bi = in.getPayload();
-			int targetId = bi.readInt();
+			}			
 
 			User targetUser = NUsers.getByCharacterId(targetId);
 			if (targetUser == null) {
 				logger.error("Error while handling player connection: Target isn't online.");
-				Packets.writeError(ctx, 0x4343, 1);
 				return;
 			}
 
 			Character target = targetUser.getCurrentCharacter();
 			if (target == null) {
 				logger.error("Error while handling player disconnection: Target isn't online.");
-				Packets.writeError(ctx, 0x4343, 1);
 				return;
 			}
 			
 			Player targetPlayer = target.getPlayer().size() > 0 ? target.getPlayer().get(0) : null;
 			if (targetPlayer == null || targetPlayer.getGameId() != game.getId()) {
 				logger.error("Error while handling player disconnection: Target isn't in this game.");
-				Packets.writeError(ctx, 0x4343, 1);
 				return;
-			}
-			
-			game.getPlayers().remove(targetPlayer);
-			target.setPlayer(new ArrayList<>());
+			}			
 			
 			session = DB.getSession();
 			session.beginTransaction();
 			
-			session.remove(player);
+			session.remove(targetPlayer);
 			
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
-			bo = ctx.alloc().directBuffer(0x8);
-
-			bo.writeInt(0).writeInt(target.getId());
-
-			Packets.write(ctx, 0x4343, bo);
+			game.getPlayers().remove(targetPlayer);
+			target.setPlayer(new ArrayList<>());
 		} catch (Exception e) {
 			logger.error("Exception while handling player disconnection.", e);
 			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4343, 1);
 		}
 	}
 
+	public static void kickPlayer(ChannelHandlerContext ctx, Packet in) {
+		ByteBuf bo = null;
+		Session session = null;
+		try {
+			ByteBuf bi = in.getPayload();
+			int targetId = bi.readInt();
+			
+			bo = ctx.alloc().directBuffer(0x8);
+			bo.writeInt(0).writeInt(targetId);
+
+			Packets.write(ctx, 0x4347, bo);
+			
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while handling player kick: No user.");
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while handling player kick: Not in a game.");
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId() != game.getHost().getId()) {
+				logger.error("Error while handling player kick: Not the host.");
+				return;
+			}
+
+			User targetUser = NUsers.getByCharacterId(targetId);
+			if (targetUser == null) {
+				logger.error("Error while handling player kick: Target isn't online.");
+				return;
+			}
+
+			Character target = targetUser.getCurrentCharacter();
+			if (target == null) {
+				logger.error("Error while handling player kick: Target isn't online.");
+				return;
+			}
+			
+			Player targetPlayer = target.getPlayer().size() > 0 ? target.getPlayer().get(0) : null;
+			if (targetPlayer == null || targetPlayer.getGameId() != game.getId()) {
+				logger.error("Error while handling player kick: Target isn't in this game.");
+				return;
+			}			
+			
+			session = DB.getSession();
+			session.beginTransaction();
+			
+			session.remove(targetPlayer);
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			game.getPlayers().remove(targetPlayer);
+			target.setPlayer(new ArrayList<>());
+		} catch (Exception e) {
+			logger.error("Exception while handling player kick.", e);
+			DB.rollbackAndClose(session);
+			Util.releaseBuffer(bo);
+		}
+	}
+	
 	public static void setGame(ChannelHandlerContext ctx, Packet in) {
 		Session session = null;
 		try {
@@ -1104,7 +1166,7 @@ public class Hosts {
 		}
 	}
 
-	public static void endGame(ChannelHandlerContext ctx) {
+	public static void quitGame(ChannelHandlerContext ctx) {
 		Session session = null;
 		try {
 			User user = NUsers.get(ctx.channel());
@@ -1124,30 +1186,43 @@ public class Hosts {
 
 			Game game = player.getGame();
 			if (character.getId() != game.getHost().getId()) {
-				logger.error("Error while ending game: Not the host.");
-				Packets.writeError(ctx, 0x4381, 2);
-				return;
-			}
+				// Not hosting
+				
+				character.setPlayer(new ArrayList<>());
+				game.getPlayers().remove(player);
+				
+				session = DB.getSession();
+				session.beginTransaction();
 
-			List<Player> players = game.getPlayers();
-			for (Player aPlayer : players) {
-				User aUser = NUsers.getByCharacterId(aPlayer.getCharacterId());
-				Character aCharacter = aUser.getCurrentCharacter();
-				if (aCharacter != null) {
-					aCharacter.setPlayer(new ArrayList<>());
+				session.remove(player);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+			} else {
+				// Hosting
+				
+				List<Player> players = game.getPlayers();
+				for (Player aPlayer : players) {
+					User aUser = NUsers.getByCharacterId(aPlayer.getCharacterId());
+					if (aUser != null) {
+						Character aCharacter = aUser.getCurrentCharacter();
+						if (aCharacter != null) {
+							aCharacter.setPlayer(new ArrayList<>());
+						}
+					}
 				}
+				game.setPlayers(new ArrayList<>());
+				NGames.remove(game);
+				
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.remove(game);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
 			}
-			game.setPlayers(new ArrayList<>());
-			NGames.remove(game);
 			
-			session = DB.getSession();
-			session.beginTransaction();
-
-			session.remove(game);
-
-			session.getTransaction().commit();
-			DB.closeSession(session);
-
 			Packets.write(ctx, 0x4381, 0);
 		} catch (Exception e) {
 			logger.error("Exception while ending game.", e);
@@ -1196,6 +1271,7 @@ public class Hosts {
 			
 			game.setHostId(target.getId());
 			game.setHost(target);
+			game.getPlayers().remove(player);
 			character.setPlayer(new ArrayList<>());
 			
 			session = DB.getSession();
@@ -1206,8 +1282,6 @@ public class Hosts {
 			
 			session.getTransaction().commit();
 			DB.closeSession(session);
-			
-			game.setHost(target);
 
 			Packets.write(ctx, 0x43a1, 0);
 		} catch (Exception e) {

@@ -16,6 +16,7 @@ import org.hibernate.service.ServiceRegistry;
 
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
+import savemgo.nomad.Nomad;
 import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterAppearance;
 import savemgo.nomad.entity.CharacterBlocked;
@@ -49,12 +50,14 @@ public class DB {
 			cpds.setUser(user);
 			cpds.setPassword(password);
 
-			cpds.setInitialPoolSize(32);
-			cpds.setMinPoolSize(16);
+			cpds.setInitialPoolSize(10);
+			cpds.setMinPoolSize(4);
 			cpds.setAcquireIncrement(4);
 			cpds.setMaxPoolSize(64);
-
-			cpds.setNumHelperThreads(16);
+			
+			cpds.setNumHelperThreads(Nomad.DB_WORKERS);
+			
+			cpds.setTestConnectionOnCheckout(true);
 		} catch (Exception e) {
 			logger.error("Failed to initialize DB.", e);
 			return false;

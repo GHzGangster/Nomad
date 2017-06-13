@@ -1,5 +1,6 @@
 package savemgo.nomad.instances;
 
+import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
@@ -21,6 +22,10 @@ public class NGames {
 		return games.remove(game.getId()) != null;
 	}
 
+	public static Collection<Game> getGames() {
+		return games.values();
+	}
+	
 	public static Game get(Predicate<Game> predicate) {
 		return games.search(1, (key, value) -> predicate.test(value) ? value : null);
 	}

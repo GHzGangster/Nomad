@@ -22,6 +22,7 @@ import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
 import savemgo.nomad.instances.NChannels;
 import savemgo.nomad.instances.NUsers;
+import savemgo.nomad.lobby.GameLobby;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -391,13 +392,13 @@ public class Users {
 
 			Character character = user.getCurrentCharacter();
 			if (character != null) {
-				Player player = Hibernate.isInitialized(character.getPlayer()) && character.getPlayer().size() > 0
-						? character.getPlayer().get(0) : null;
+				Player player = Hibernate.isInitialized(character.getPlayer()) && character.getPlayer() != null
+						&& character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
 				if (player != null) {
-					Game game = player.getGame();
-					if (Hibernate.isInitialized(game) && character.getId() == game.getHost().getId()) {
+					Game game = Hibernate.isInitialized(player.getGame()) ? player.getGame() : null;
+					if (game != null && character.getId() == game.getHost().getId()) {
 						// Hosting a game, but disconnected
-						Hosts.endGame(ctx);
+						Hosts.quitGame(ctx);
 					}
 				}
 

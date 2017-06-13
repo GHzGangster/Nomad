@@ -16,7 +16,9 @@ import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.News;
+import savemgo.nomad.entity.User;
 import savemgo.nomad.instances.NLobbies;
+import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
@@ -30,7 +32,7 @@ public class Hub {
 		try {
 			Collection<Lobby> lobbies = NLobbies.get().values();
 			Iterator<Lobby> iterator = lobbies.iterator();
-			
+
 			Packets.handleMutliElementPayload(ctx, lobbies.size(), 8, 0x23, payloads, (i, bo) -> {
 				Lobby lobby = iterator.next();
 
@@ -161,6 +163,25 @@ public class Hub {
 		// In: 08
 		ByteBuf bo = Unpooled.wrappedBuffer(TRAINING_BYTES);
 		Packets.write(ctx, 0x43d1, bo);
+	}
+
+	public static void updateLobbyCounts() {
+		try {
+			Collection<Lobby> lobbies = NLobbies.get().values();
+			for (Lobby lobby : lobbies) {
+				List<User> users = NUsers.get((e) -> {
+					if (e.getCurrentCharacterId() != null && e.getCurrentCharacter() != null) {
+						if (e.getCurrentCharacter().getLobbyId() != null) {
+							return e.getCurrentCharacter().getLobbyId() == lobby.getId();
+						}
+					}
+					return false;
+				});
+				lobby.setPlayers(users.size());
+			}
+		} catch (Exception e) {
+			logger.error("Exception while updating lobby count.", e);
+		}
 	}
 
 }

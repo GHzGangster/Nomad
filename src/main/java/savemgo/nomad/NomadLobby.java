@@ -58,6 +58,8 @@ public abstract class NomadLobby extends ChannelInboundHandlerAdapter {
 	public final void channelRead(ChannelHandlerContext ctx, Object msg) {
 		Packet in = (Packet) msg;
 
+		logger.debug("Got Packet: " + in.getCommand());
+		
 		boolean wrote = false;
 		try {
 			int result = handleCommonPacket(ctx, in);
@@ -74,6 +76,7 @@ public abstract class NomadLobby extends ChannelInboundHandlerAdapter {
 
 		if (wrote) {
 			ctx.flush();
+			logger.debug("Flushed.");
 		}
 	}
 

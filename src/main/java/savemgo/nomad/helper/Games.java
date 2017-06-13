@@ -1,13 +1,13 @@
 package savemgo.nomad.helper;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hibernate.Session;
-import org.hibernate.query.Query;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -15,7 +15,6 @@ import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.ConnectionInfo;
 import savemgo.nomad.entity.Game;
@@ -66,22 +65,17 @@ public class Games {
 
 	public static void getList(ChannelHandlerContext ctx, Lobby lobby, int command) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
-		Session session = null;
 		try {
-			session = DB.getSession();
-			session.beginTransaction();
+			Collection<Game> games = NGames.getGames();
+			ArrayList<Game> gamez = new ArrayList<>();
+			for (Game game : games) {
+				if (game.getLobbyId() == lobby.getId()) {
+					gamez.add(game);
+				}
+			}
 
-			Query<Game> query = session
-					.createQuery("from Game as g left join fetch g.host left join fetch g.players as p "
-							+ "left join fetch p.character where g.lobby=:lobby", Game.class);
-			query.setParameter("lobby", lobby);
-			List<Game> games = query.list();
-
-			session.getTransaction().commit();
-			DB.closeSession(session);
-
-			Packets.handleMutliElementPayload(ctx, games.size(), 18, 0x37, payloads, (i, bo) -> {
-				Game game = games.get(i);
+			Packets.handleMutliElementPayload(ctx, gamez.size(), 18, 0x37, payloads, (i, bo) -> {
+				Game game = gamez.get(i);
 
 				String jsonGames = game.getGames();
 				String jsonCommon = game.getCommon();
@@ -172,7 +166,6 @@ public class Games {
 			Packets.write(ctx, command + 2, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting game list.", e);
-			DB.rollbackAndClose(session);
 			Util.releaseBuffers(payloads);
 			Packets.writeError(ctx, command, 1);
 		}
@@ -180,23 +173,11 @@ public class Games {
 
 	public static void getDetails(ChannelHandlerContext ctx, Packet in, Lobby lobby) {
 		ByteBuf bo = null;
-		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			int gameId = bi.readInt();
 
-			session = DB.getSession();
-			session.beginTransaction();
-
-			Query<Game> query = session
-					.createQuery("from Game as g left join fetch g.host left join fetch g.players as p "
-							+ "left join fetch p.character where g.id=:gameId", Game.class);
-			query.setParameter("gameId", gameId);
-
-			Game game = query.uniqueResult();
-
-			session.getTransaction().commit();
-			DB.closeSession(session);
+			Game game = NGames.get(gameId);
 
 			String jsonGames = game.getGames();
 			String jsonCommon = game.getCommon();
@@ -520,7 +501,7 @@ public class Games {
 			}
 
 			Character character = user.getCurrentCharacter();
-			
+
 			ByteBuf bi = in.getPayload();
 			int gameId = bi.readInt();
 			String password = Util.readString(bi, 16);
@@ -531,7 +512,7 @@ public class Games {
 				Packets.writeError(ctx, 0x4321, 3);
 				return;
 			}
-			
+
 			List<ConnectionInfo> connectionInfoList = game.getHost().getConnectionInfo();
 			if (connectionInfoList.size() <= 0) {
 				logger.error("Error while joining game: No connection info.");
@@ -539,15 +520,15 @@ public class Games {
 				return;
 			}
 			ConnectionInfo connectionInfo = connectionInfoList.get(0);
-
-			String jsonGames = game.getGames();
 			
+			String jsonGames = game.getGames();
+
 			JsonArray games = Util.jsonDecodeArray(jsonGames);
 			JsonArray mapRule = games.get(game.getCurrentGame()).getAsJsonArray();
-			
+
 			int rule = mapRule.get(0).getAsInt();
 			int map = mapRule.get(1).getAsInt();
-			
+
 			character.setGameJoining(game.getId());
 			logger.debug("Character game joining: {}", character.getGameJoining());
 

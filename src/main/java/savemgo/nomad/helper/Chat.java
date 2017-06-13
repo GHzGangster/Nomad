@@ -37,7 +37,6 @@ public class Chat {
 	}
 
 	public static void send(ChannelHandlerContext ctx, Packet in) {
-		ByteBuf bo = null;
 		try {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
@@ -66,10 +65,10 @@ public class Chat {
 				message = message.replaceFirst("/team", "");
 			}
 
-			if (message.matches("(\\s+).*")){
+			if (message.matches("(\\s+).*")) {
 				message = message.replaceFirst("(\\s+)", "");
 			}
-			
+
 			MessageRecipient mr = MessageRecipient.NORMAL;
 
 			if (message.startsWith("/nuser")) {
@@ -78,18 +77,21 @@ public class Chat {
 				mr = MessageRecipient.SELF;
 			}
 
-			switch (mr) {
-			case SELF:
-				bo = constructMessage(ctx, character.getId(), flag2, message);
-				Packets.write(ctx, 0x4401, bo);
-				break;
-			case GLOBAL:
-			default:
-				bo = constructMessage(ctx, character.getId(), flag2, message);
+			if (mr == MessageRecipient.SELF) {
+				ByteBuf bo = null;
+				try {
+					bo = constructMessage(ctx, character.getId(), flag2, message);
+					Packets.write(ctx, 0x4401, bo);
+				} catch (Exception e) {
+					logger.error("Exception during chat processing.", e);
+					Util.releaseBuffer(bo);
+					Packets.writeError(ctx, 0x4401, 1);
+				}
+			} else if (mr == MessageRecipient.GLOBAL) {
 
+			} else {
 				ArrayList<Player> recipients = new ArrayList<>(players);
-
-				final ByteBuf _bo = bo;
+				final String fmessage = message;
 				NChannels.process((ch) -> {
 					try {
 						User targetUser = NUsers.get(ch);
@@ -99,23 +101,24 @@ public class Chat {
 									.count() > 0;
 						}
 					} catch (Exception e) {
-						logger.error("Exception during channel processing.", e);
+						logger.error("Exception during chat processing.", e);
 					}
 					return false;
 				}, (ch) -> {
+					ByteBuf bo = null;
 					try {
-						Packets.write(ch, 0x4401, _bo);
+						bo = constructMessage(ctx, character.getId(), flag2, fmessage);
+						Packets.write(ch, 0x4401, bo);
 						Packets.flush(ch);
 					} catch (Exception e) {
-						logger.error("Exception during channel processing.", e);
+						logger.error("Exception during chat processing.", e);
+						Util.releaseBuffer(bo);
+						Packets.writeError(ctx, 0x4401, 1);
 					}
 				});
-				break;
 			}
 		} catch (Exception e) {
 			logger.error("Exception while sending message.", e);
-			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4401, 1);
 		}
 	}
 
