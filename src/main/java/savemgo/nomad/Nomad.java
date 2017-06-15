@@ -159,7 +159,7 @@ public class Nomad {
 			service.start(() -> {
 				Hub.updateLobbyCounts();
 				return true;
-			}, 30);
+			}, 60);
 			
 			ChannelFuture future = serverGameJp.getFuture();
 

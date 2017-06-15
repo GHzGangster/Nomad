@@ -55,7 +55,6 @@ public class PacketDecoder extends ChannelInboundHandlerAdapter {
 			while (true) {
 				int readable = buffer.readableBytes();
 				if (readable == 0) {
-					logger.debug("No bytes to read in.");
 					return;
 				} else if (readable < Packet.OFFSET_PAYLOAD) {
 					logger.debug("Packet is too short, waiting for header...");

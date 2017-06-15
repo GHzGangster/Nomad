@@ -247,6 +247,7 @@ public class GameLobby extends NomadLobby {
 
 		/** Unknown */
 		case 0x4128:
+			// Player still here after a kicked host passed
 			Packets.write(ctx, 0x4129, 0);
 			break;
 

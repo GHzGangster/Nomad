@@ -169,7 +169,7 @@ public class Characters {
 
 			viewChangeSpeed -= 1;
 
-			int unknown = 1;
+			int unknown = 0;//1;
 
 			int privacyA = 1;
 			privacyA |= (onlineStatusMode & 0b11) << 4;
@@ -704,6 +704,7 @@ public class Characters {
 			appearance.setFeetColor(feetColor);
 			appearance.setAccessory1Color(accessory1Color);
 			appearance.setAccessory2Color(accessory2Color);
+			appearance.setFacePaint(facePaint);
 
 			skills.setSkill1(skill1);
 			skills.setSkill2(skill2);
@@ -841,14 +842,24 @@ public class Characters {
 
 			Character character = user.getCurrentCharacter();
 			List<CharacterSetSkills> sets = character.getSetsSkills();
-			if (sets == null) {
-				sets = new ArrayList<CharacterSetSkills>();
+			if (sets.size() <= 0) {
 				for (int index = 0; index < 3; index++) {
 					CharacterSetSkills set = new CharacterSetSkills();
+					set.setCharacterId(character.getId());
 					set.setCharacter(character);
 					set.setIndex(index);
+					set.setName("");
+					set.setModes(0);
+					set.setSkill1(0);
+					set.setSkill2(0);
+					set.setSkill3(0);
+					set.setSkill4(0);
+					set.setLevel1(0);
+					set.setLevel2(0);
+					set.setLevel3(0);
+					set.setLevel4(0);
+					sets.add(set);
 				}
-				character.setSetsSkills(sets);
 			}
 
 			bo = ctx.alloc().directBuffer(0x4d * sets.size());
@@ -880,15 +891,6 @@ public class Characters {
 
 			Character character = user.getCurrentCharacter();
 			List<CharacterSetSkills> sets = character.getSetsSkills();
-			if (sets == null) {
-				sets = new ArrayList<CharacterSetSkills>();
-				for (int index = 0; index < 3; index++) {
-					CharacterSetSkills set = new CharacterSetSkills();
-					set.setCharacter(character);
-					set.setIndex(index);
-				}
-				character.setSetsSkills(sets);
-			}
 
 			ByteBuf bi = in.getPayload();
 
@@ -1020,7 +1022,7 @@ public class Characters {
 			ByteBuf bi = in.getPayload();
 
 			for (int i = 0; i < 3; i++) {
-				CharacterSetGear set = sets.get(0);
+				CharacterSetGear set = sets.get(i);
 				
 				int stages = bi.readInt();
 				int face = bi.readUnsignedByte();
@@ -1400,6 +1402,7 @@ public class Characters {
 		try {
 			ByteBuf bi = in.getPayload();
 			boolean exactOnly = bi.readBoolean();
+			@SuppressWarnings("unused")
 			boolean caseSensitive = bi.readBoolean();
 			String name = Util.readString(bi, 0x10);
 

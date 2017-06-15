@@ -370,7 +370,7 @@ public class Games {
 			wr[0] |= weaponRestrictionEnabled ? 0b1 : 0;
 			wr[0] |= !knife ? 0b10 : 0;
 			wr[0] |= !mk2 ? 0b100 : 0;
-			wr[0] |= !operator ? 0b100 : 0;
+			wr[0] |= !operator ? 0b1000 : 0;
 			wr[0] |= !mk23 ? 0b10000 : 0;
 			wr[0] |= !gsr ? 0b10000000 : 0;
 
@@ -474,7 +474,24 @@ public class Games {
 					.writeByte(scapRounds).writeByte(raceTime).writeByte(raceRounds).writeZero(1)
 					.writeByte(hostOptionsExtraTimeFlags).writeZero(4);
 
+			Player playerHost = null;
 			for (Player player : players) {
+				if (player.getCharacterId() == game.getHostId()) {
+					playerHost = player;
+					break;
+				}
+			}
+			
+			if (playerHost != null) {
+				bo.writeInt(playerHost.getCharacterId());
+				Util.writeString(playerHost.getCharacter().getName(), 0x10, bo);
+				bo.writeInt(playerHost.getPing()).writeInt(playerHost.getCharacter().getExp());
+			}
+			
+			for (Player player : players) {
+				if (player == null || player == playerHost) {
+					continue;
+				}
 				bo.writeInt(player.getCharacterId());
 				Util.writeString(player.getCharacter().getName(), 0x10, bo);
 				bo.writeInt(player.getPing()).writeInt(player.getCharacter().getExp());
@@ -513,6 +530,12 @@ public class Games {
 				return;
 			}
 
+			if (game.getPassword() != null && password != game.getPassword()) {
+				logger.error("Error while joining game: Bad password.");
+				Packets.writeError(ctx, 0x4321, 3);
+				return;
+			}
+			
 			List<ConnectionInfo> connectionInfoList = game.getHost().getConnectionInfo();
 			if (connectionInfoList.size() <= 0) {
 				logger.error("Error while joining game: No connection info.");
@@ -559,6 +582,12 @@ public class Games {
 			}
 
 			Character character = user.getCurrentCharacter();
+			
+//			int gameId = character.getGameJoining();
+//			if () {
+//				
+//			}
+			
 			character.setGameJoining(null);
 
 			Packets.write(ctx, 0x4323, 0);

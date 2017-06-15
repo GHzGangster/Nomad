@@ -253,7 +253,7 @@ public class Hosts {
 			wr[0] |= weaponRestrictionEnabled ? 0b1 : 0;
 			wr[0] |= !knife ? 0b10 : 0;
 			wr[0] |= !mk2 ? 0b100 : 0;
-			wr[0] |= !operator ? 0b100 : 0;
+			wr[0] |= !operator ? 0b1000 : 0;
 			wr[0] |= !mk23 ? 0b10000 : 0;
 			wr[0] |= !gsr ? 0b10000000 : 0;
 
@@ -603,7 +603,7 @@ public class Hosts {
 			weaponRestrictions.add("secondary", wrSecondary);
 			boolean gsr = (wr[0] & 0b10000000) == 0;
 			boolean mk2 = (wr[0] & 0b100) == 0;
-			boolean operator = (wr[0] & 0b100) == 0;
+			boolean operator = (wr[0] & 0b1000) == 0;
 			boolean g18 = (wr[1] & 0b10000000) == 0;
 			boolean mk23 = (wr[0] & 0b10000) == 0;
 			boolean de = (wr[1] & 0b1) == 0;
@@ -838,8 +838,8 @@ public class Hosts {
 			DB.closeSession(session);
 
 			ArrayList<Player> players = new ArrayList<>();
-			players.add(player);
 			player.setGameId(game.getId());
+			players.add(player);
 			
 			character.setPlayer(Arrays.asList(player));
 			game.setPlayers(players);
@@ -956,28 +956,39 @@ public class Hosts {
 				return;
 			}
 
-			if (target.getGameJoining() != game.getId()) {
-				logger.error("Error while handling player connection: Player isn't joining this game.");
-				Packets.writeError(ctx, 0x4341, 1);
-				return;
+			Player targetPlayer = target.getPlayer().size() > 0 ? target.getPlayer().get(0) : null;
+			if (targetPlayer == null) {
+				// Player is joining game
+				if (target.getGameJoining() != game.getId()) {
+					logger.error("Error while handling player connection: Player isn't joining this game.");
+					Packets.writeError(ctx, 0x4341, 1);
+					return;
+				}
+				
+				targetPlayer = new Player();
+				targetPlayer.setCharacterId(target.getId());
+				targetPlayer.setCharacter(target);
+				targetPlayer.setGameId(game.getId());
+				targetPlayer.setGame(game);
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.saveOrUpdate(targetPlayer);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+				
+				target.setPlayer(Arrays.asList(targetPlayer));
+				game.getPlayers().add(targetPlayer);
+			} else {
+				// Player is already in game
+				if (targetPlayer.getGameId() != game.getId()) {
+					logger.error("Error while handling player connection: Player is in another game.");
+					Packets.writeError(ctx, 0x4341, 1);
+					return;
+				}
 			}
-
-			Player targetPlayer = new Player();
-			targetPlayer.setCharacterId(target.getId());
-			targetPlayer.setCharacter(target);
-			targetPlayer.setGameId(game.getId());
-			targetPlayer.setGame(game);
-
-			session = DB.getSession();
-			session.beginTransaction();
-
-			session.saveOrUpdate(targetPlayer);
-
-			session.getTransaction().commit();
-			DB.closeSession(session);
-			
-			target.setPlayer(Arrays.asList(targetPlayer));
-			game.getPlayers().add(targetPlayer);
 
 			bo = ctx.alloc().directBuffer(0x8);
 
@@ -1060,7 +1071,6 @@ public class Hosts {
 
 	public static void kickPlayer(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
-		Session session = null;
 		try {
 			ByteBuf bi = in.getPayload();
 			int targetId = bi.readInt();
@@ -1069,57 +1079,8 @@ public class Hosts {
 			bo.writeInt(0).writeInt(targetId);
 
 			Packets.write(ctx, 0x4347, bo);
-			
-			User user = NUsers.get(ctx.channel());
-			if (user == null) {
-				logger.error("Error while handling player kick: No user.");
-				return;
-			}
-
-			Character character = user.getCurrentCharacter();
-			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
-			if (player == null) {
-				logger.error("Error while handling player kick: Not in a game.");
-				return;
-			}
-
-			Game game = player.getGame();
-			if (character.getId() != game.getHost().getId()) {
-				logger.error("Error while handling player kick: Not the host.");
-				return;
-			}
-
-			User targetUser = NUsers.getByCharacterId(targetId);
-			if (targetUser == null) {
-				logger.error("Error while handling player kick: Target isn't online.");
-				return;
-			}
-
-			Character target = targetUser.getCurrentCharacter();
-			if (target == null) {
-				logger.error("Error while handling player kick: Target isn't online.");
-				return;
-			}
-			
-			Player targetPlayer = target.getPlayer().size() > 0 ? target.getPlayer().get(0) : null;
-			if (targetPlayer == null || targetPlayer.getGameId() != game.getId()) {
-				logger.error("Error while handling player kick: Target isn't in this game.");
-				return;
-			}			
-			
-			session = DB.getSession();
-			session.beginTransaction();
-			
-			session.remove(targetPlayer);
-			
-			session.getTransaction().commit();
-			DB.closeSession(session);
-
-			game.getPlayers().remove(targetPlayer);
-			target.setPlayer(new ArrayList<>());
 		} catch (Exception e) {
 			logger.error("Exception while handling player kick.", e);
-			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
 		}
 	}
@@ -1193,7 +1154,7 @@ public class Hosts {
 				
 				session = DB.getSession();
 				session.beginTransaction();
-
+				
 				session.remove(player);
 
 				session.getTransaction().commit();
