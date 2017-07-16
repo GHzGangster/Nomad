@@ -2,15 +2,10 @@ package savemgo.nomad;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,16 +17,12 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
-import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.EventExecutorGroup;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.ProgressivePromise;
-import io.netty.util.concurrent.Promise;
-import io.netty.util.concurrent.ScheduledFuture;
 import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Game;
 import savemgo.nomad.entity.Lobby;
+import savemgo.nomad.helper.Games;
 import savemgo.nomad.helper.Hub;
 import savemgo.nomad.instances.NLobbies;
 import savemgo.nomad.lobby.AccountLobby;
@@ -40,7 +31,7 @@ import savemgo.nomad.lobby.GateLobby;
 
 public class Nomad {
 
-	private static final Logger logger = LogManager.getLogger(Nomad.class);
+	private static final Logger logger = LogManager.getLogger();
 
 	private EventLoopGroup bossGroup, workerGroup;
 
@@ -68,6 +59,7 @@ public class Nomad {
 		Properties properties = new Properties();
 		String key = "";
 		String dbUrl = null, dbUser = null, dbPassword = null;
+		ArrayList<Integer> lobbyIds = new ArrayList<>();
 		try {
 			properties.load(new FileInputStream(new File("nomad.properties")));
 			key = properties.getProperty("apikey");
@@ -76,6 +68,13 @@ public class Nomad {
 			dbPassword = properties.getProperty("dbPassword");
 			DB_WORKERS = Integer.parseInt(properties.getProperty("dbWorkers"));
 			SERVER_WORKERS = Integer.parseInt(properties.getProperty("serverWorkers"));
+
+			String strLobbies = properties.getProperty("lobbies");
+			String[] strsLobbies = strLobbies.split(",");
+			for (String lobStr : strsLobbies) {
+				int id = Integer.parseInt(lobStr);
+				lobbyIds.add(id);
+			}
 		} catch (Exception e) {
 			logger.error("Error while reading properties file.", e);
 		}
@@ -95,30 +94,26 @@ public class Nomad {
 
 		Session session = null;
 		try {
-			Lobby lobbyGateNa = null, lobbyGateJp = null, lobbyGateEu = null, lobbyAccount = null, lobbyGameNa = null,
-					lobbyGameEu = null, lobbyGameJp = null;
+			ArrayList<Lobby> lobbies = new ArrayList<>();
 
 			session = DB.getSession();
 			session.beginTransaction();
 
-			lobbyGateNa = session.get(Lobby.class, 1);
-			lobbyAccount = session.get(Lobby.class, 2);
-			lobbyGameNa = session.get(Lobby.class, 3);
-			lobbyGateJp = session.get(Lobby.class, 4);
-			lobbyGateEu = session.get(Lobby.class, 5);
-			lobbyGameEu = session.get(Lobby.class, 6);
-			lobbyGameJp = session.get(Lobby.class, 7);
+			for (Integer lobbyId : lobbyIds) {
+				Lobby lobby = session.get(Lobby.class, lobbyId);
+				lobbies.add(lobby);
+			}
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
-			NLobbies.add(lobbyGateJp);
-			NLobbies.add(lobbyGateNa);
-			NLobbies.add(lobbyGateEu);
-			NLobbies.add(lobbyAccount);
-			NLobbies.add(lobbyGameNa);
-			NLobbies.add(lobbyGameEu);
-			NLobbies.add(lobbyGameJp);
+			for (Lobby lobby : lobbies) {
+				if (lobby.getType() < 0 || lobby.getType() > 2) {
+					continue;
+				}
+				NLobbies.add(lobby);
+			}
+			Hub.initializeLobbies();
 
 			bossGroup = new NioEventLoopGroup(1);
 			workerGroup = new NioEventLoopGroup();
@@ -133,35 +128,34 @@ public class Nomad {
 				}
 			});
 
-			NomadServer serverGateJp = new NomadServer(new GateLobby(lobbyGateJp), bossGroup, workerGroup,
-					executorGroup);
-			NomadServer serverGateNa = new NomadServer(new GateLobby(lobbyGateNa), bossGroup, workerGroup,
-					executorGroup);
-			NomadServer serverGateEu = new NomadServer(new GateLobby(lobbyGateEu), bossGroup, workerGroup,
-					executorGroup);
-			NomadServer serverAccount = new NomadServer(new AccountLobby(lobbyAccount), bossGroup, workerGroup,
-					executorGroup);
-			NomadServer serverGameNa = new NomadServer(new GameLobby(lobbyGameNa), bossGroup, workerGroup, executorGroup);
-			NomadServer serverGameEu = new NomadServer(new GameLobby(lobbyGameEu), bossGroup, workerGroup, executorGroup);
-			NomadServer serverGameJp = new NomadServer(new GameLobby(lobbyGameJp), bossGroup, workerGroup, executorGroup);
-
-			serverGateJp.start();
-			serverGateNa.start();
-			serverGateEu.start();
-			serverAccount.start();
-			serverGameNa.start();
-			serverGameEu.start();
-			serverGameJp.start();
+			ArrayList<NomadServer> servers = new ArrayList<>();
+			for (Lobby lobby : lobbies) {
+				NomadLobby nLobby = null;
+				if (lobby.getType() == 0) {
+					nLobby = new GateLobby(lobby);
+				} else if (lobby.getType() == 1) {
+					nLobby = new AccountLobby(lobby);
+				} else if (lobby.getType() == 2) {
+					nLobby = new GameLobby(lobby);
+				}
+				NomadServer nServer = new NomadServer(nLobby, bossGroup, workerGroup, executorGroup);
+				servers.add(nServer);
+			}
+			
+			for (NomadServer server : servers) {
+				server.start();
+			}
 
 			logger.info("Started server.");
 
 			NomadService service = new NomadService();
 			service.start(() -> {
-				Hub.updateLobbyCounts();
+				Hub.updateLobbies();
+				Games.cleanup();
 				return true;
 			}, 60);
-			
-			ChannelFuture future = serverGameJp.getFuture();
+
+			ChannelFuture future = servers.get(0).getFuture();
 
 			try {
 				future.sync();

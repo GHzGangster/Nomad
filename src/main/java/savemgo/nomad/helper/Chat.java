@@ -69,12 +69,24 @@ public class Chat {
 				message = message.replaceFirst("(\\s+)", "");
 			}
 
+			if (message.startsWith("Server |")) {
+				message = message.replaceFirst("Server |", "");
+			}
+
 			MessageRecipient mr = MessageRecipient.NORMAL;
 
 			if (message.startsWith("/nuser")) {
 				message = "[NUser] " + user.getDisplayName() + " (" + user.getId() + ") - " + character.getName() + " ("
 						+ character.getId() + ") " + "Game: " + game.getId() + " - Team: " + player.getTeam();
 				mr = MessageRecipient.SELF;
+			} else if (message.startsWith("/global ")) {
+				if (user.getRole() >= 10) {
+					message = "Server | " + message.replaceFirst("/global ", "");
+					mr = MessageRecipient.GLOBAL;
+				} else {
+					message = "Server | You do not have permission to use this command.";
+					mr = MessageRecipient.SELF;
+				}
 			}
 
 			if (mr == MessageRecipient.SELF) {
@@ -88,7 +100,30 @@ public class Chat {
 					Packets.writeError(ctx, 0x4401, 1);
 				}
 			} else if (mr == MessageRecipient.GLOBAL) {
-
+				final String fmessage = message;
+				NChannels.process((ch) -> {
+					try {
+						User targetUser = NUsers.get(ch);
+						Character targetCharacter = targetUser.getCurrentCharacter();
+						return targetCharacter != null;
+					} catch (Exception e) {
+						logger.error("Exception during chat processing.", e);
+					}
+					return false;
+				}, (ch) -> {
+					ByteBuf bo = null;
+					try {
+						User targetUser = NUsers.get(ch);
+						Character targetCharacter = targetUser.getCurrentCharacter();
+						bo = constructMessage(ctx, targetCharacter.getId(), flag2, fmessage);
+						Packets.write(ch, 0x4401, bo);
+						Packets.flush(ch);
+					} catch (Exception e) {
+						logger.error("Exception during chat processing.", e);
+						Util.releaseBuffer(bo);
+						Packets.writeError(ctx, 0x4401, 1);
+					}
+				});
 			} else {
 				ArrayList<Player> recipients = new ArrayList<>(players);
 				final String fmessage = message;

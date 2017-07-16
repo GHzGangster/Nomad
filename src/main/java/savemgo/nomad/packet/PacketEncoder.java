@@ -37,10 +37,10 @@ public class PacketEncoder extends ChannelOutboundHandlerAdapter {
 			final Packet fPacket = packet;
 
 			if (lenP > 0) {
-				logger.debug("{} - Out - Command {} - {} bytes", Util.getIp(ctx), String.format("%04x", command), lenP);
+				logger.debug("{} - Out - Command {} - {} bytes", Util.getUserInfo(ctx), String.format("%04x", command), lenP);
 				logger.debug(() -> ByteBufUtil.hexDump(fPacket.getPayload()));
 			} else {
-				logger.debug("{} - Out - Command {}", Util.getIp(ctx), String.format("%04x", command));
+				logger.debug("{} - Out - Command {}", Util.getUserInfo(ctx), String.format("%04x", command));
 			}
 
 			int pad = 0;

@@ -122,17 +122,17 @@ public class GameLobby extends NomadLobby {
 		/** Games */
 		case 0x4300:
 			Games.getList(ctx, getLobby(), 0x4301);
-//			Games.getListFile(ctx, getId(), 0x4301);
+			// Games.getListFile(ctx, getId(), 0x4301);
 			break;
 
 		case 0x4312:
 			Games.getDetails(ctx, in, getLobby());
-//			Games.getDetailsFile(ctx, in, getId());
+			// Games.getDetailsFile(ctx, in, getId());
 			break;
 
 		case 0x4320:
 			Games.join(ctx, in);
-//			Games.joinHostFile(ctx, in);
+			// Games.joinHostFile(ctx, in);
 			break;
 
 		case 0x4322:
@@ -187,14 +187,13 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4398:
-			// Player Pings, Heartbeat
-			Packets.write(ctx, 0x4399, 0);
+			Hosts.updatePings(ctx, in);
 			break;
 
 		case 0x43a0:
 			Hosts.pass(ctx, in);
 			break;
-			
+
 		case 0x43a2:
 			// Unknown, end of round, stats?
 			Packets.write(ctx, 0x43a3, 0);
@@ -258,7 +257,7 @@ public class GameLobby extends NomadLobby {
 
 		return true;
 	}
-	
+
 	@Override
 	public void onChannelInactive(ChannelHandlerContext ctx) {
 		Users.onLobbyDisconnected(ctx, getLobby());

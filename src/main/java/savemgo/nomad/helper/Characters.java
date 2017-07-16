@@ -169,7 +169,7 @@ public class Characters {
 
 			viewChangeSpeed -= 1;
 
-			int unknown = 0;//1;
+			int unknown = 0;// 1;
 
 			int privacyA = 1;
 			privacyA |= (onlineStatusMode & 0b11) << 4;
@@ -469,7 +469,7 @@ public class Characters {
 			}
 
 			Character character = user.getCurrentCharacter();
-			
+
 			List<CharacterChatMacro> macros = character.getChatMacros();
 			if (macros.size() <= 0) {
 				for (int typem = 0; typem < 2; typem++) {
@@ -483,7 +483,7 @@ public class Characters {
 					}
 				}
 			}
-			
+
 			bos = new ByteBuf[2];
 			for (int i = 0; i < bos.length; i++) {
 				bos[i] = ctx.alloc().directBuffer(0x301);
@@ -1016,14 +1016,14 @@ public class Characters {
 			}
 
 			Character character = user.getCurrentCharacter();
-			
+
 			List<CharacterSetGear> sets = character.getSetsGear();
 
 			ByteBuf bi = in.getPayload();
 
 			for (int i = 0; i < 3; i++) {
 				CharacterSetGear set = sets.get(i);
-				
+
 				int stages = bi.readInt();
 				int face = bi.readUnsignedByte();
 				int head = bi.readUnsignedByte();
@@ -1068,19 +1068,19 @@ public class Characters {
 				set.setFeetColor(feetColor);
 				set.setAccessory1Color(accessory1Color);
 				set.setAccessory2Color(accessory2Color);
-				set.setFacePaint(facePaint);				
+				set.setFacePaint(facePaint);
 			}
 
 			session = DB.getSession();
 			session.beginTransaction();
-			
+
 			for (CharacterSetGear set : sets) {
 				session.saveOrUpdate(set);
 			}
-			
+
 			session.getTransaction().commit();
 			DB.closeSession(session);
-			
+
 			Packets.write(ctx, 0x4143, 0);
 		} catch (Exception e) {
 			logger.error("Exception while updating gear sets.", e);
@@ -1212,7 +1212,8 @@ public class Characters {
 
 					bo.writeInt(block.getTargetId());
 					Util.writeString(block.getTarget().getName(), 16, bo);
-					bo.writeShort(block.getTarget().getLobbyId()).writeInt(gameId);
+					int lobbyId = block.getTarget().getLobbyId() != null ? block.getTarget().getLobbyId() : 0;
+					bo.writeShort(lobbyId).writeInt(gameId);
 					Util.writeString(gameHostName, 16, bo);
 					bo.writeByte(gameType);
 				});

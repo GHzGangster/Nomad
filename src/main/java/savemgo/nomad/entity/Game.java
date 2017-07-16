@@ -1,5 +1,6 @@
 package savemgo.nomad.entity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.persistence.CascadeType;
@@ -13,10 +14,20 @@ import javax.persistence.JoinColumn;
 import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Transient;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 @Entity
 @Table(name = "mgo2_games")
 public class Game {
+
+	@Transient
+	private static final Logger logger = LogManager.getLogger();
+
+	@Transient
+	private int lastUpdate = 0;
 
 	@Column(nullable = false, unique = true)
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -200,6 +211,44 @@ public class Game {
 
 	public void setPlayers(List<Player> players) {
 		this.players = players;
+	}
+
+	public void initPlayers() {
+		players = new ArrayList<Player>();
+		logger.debug("Game {} | Initialized players.", id);
+	}
+
+	public void clearPlayers() {
+		players.clear();
+		logger.debug("Game {} | Cleared players.", id);
+	}
+
+	public void addPlayer(Player player) {
+		players.add(player);
+		logger.debug("Game {} | Added player: {}", id, player.getCharacterId());
+	}
+
+	public void removePlayer(Player player) {
+		players.remove(player);
+		logger.debug("Game {} | Removed player: {}", id, player.getCharacterId());
+	}
+
+	public Player getPlayerByCharacterId(int id) {
+		Player player = players.stream().filter((e) -> e.getCharacterId() == id).findAny().orElse(null);
+		if (player != null) {
+			logger.debug("Game {} | Got player: {}", this.id, id);
+		} else {
+			logger.debug("Game {} | Couldn't get player: {}", this.id, id);
+		}
+		return player;
+	}
+
+	public int getLastUpdate() {
+		return lastUpdate;
+	}
+
+	public void setLastUpdate(int lastUpdate) {
+		this.lastUpdate = lastUpdate;
 	}
 
 }

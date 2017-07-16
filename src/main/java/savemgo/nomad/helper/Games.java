@@ -1,6 +1,7 @@
 package savemgo.nomad.helper;
 
 import java.io.File;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -178,7 +179,12 @@ public class Games {
 			int gameId = bi.readInt();
 
 			Game game = NGames.get(gameId);
-
+			if (game == null) {
+				logger.error("Error while getting game details: No game.");
+				Packets.writeError(ctx, 0x4313, 2);
+				return;
+			}
+			
 			String jsonGames = game.getGames();
 			String jsonCommon = game.getCommon();
 			String jsonRules = game.getRules();
@@ -481,13 +487,13 @@ public class Games {
 					break;
 				}
 			}
-			
+
 			if (playerHost != null) {
 				bo.writeInt(playerHost.getCharacterId());
 				Util.writeString(playerHost.getCharacter().getName(), 0x10, bo);
 				bo.writeInt(playerHost.getPing()).writeInt(playerHost.getCharacter().getExp());
 			}
-			
+
 			for (Player player : players) {
 				if (player == null || player == playerHost) {
 					continue;
@@ -530,12 +536,12 @@ public class Games {
 				return;
 			}
 
-			if (game.getPassword() != null && password != game.getPassword()) {
-				logger.error("Error while joining game: Bad password.");
+			if (game.getPassword() != null && !password.equals(game.getPassword())) {
+				logger.error("Error while joining game: Bad password. User: {} Orig: {}", password, game.getPassword());
 				Packets.writeError(ctx, 0x4321, 3);
 				return;
 			}
-			
+
 			List<ConnectionInfo> connectionInfoList = game.getHost().getConnectionInfo();
 			if (connectionInfoList.size() <= 0) {
 				logger.error("Error while joining game: No connection info.");
@@ -543,7 +549,7 @@ public class Games {
 				return;
 			}
 			ConnectionInfo connectionInfo = connectionInfoList.get(0);
-			
+
 			String jsonGames = game.getGames();
 
 			JsonArray games = Util.jsonDecodeArray(jsonGames);
@@ -553,7 +559,7 @@ public class Games {
 			int map = mapRule.get(1).getAsInt();
 
 			character.setGameJoining(game.getId());
-			logger.debug("Character game joining: {}", character.getGameJoining());
+			logger.debug("Joining game: {}", Util.getUserInfo(ctx), character.getGameJoining());
 
 			bo = ctx.alloc().directBuffer(0x2b);
 
@@ -582,18 +588,28 @@ public class Games {
 			}
 
 			Character character = user.getCurrentCharacter();
-			
-//			int gameId = character.getGameJoining();
-//			if () {
-//				
-//			}
-			
-			character.setGameJoining(null);
+
+			if (character.getGameJoining() != null) {
+				logger.debug("Failed to join game: {}", Util.getUserInfo(ctx), character.getGameJoining());
+				character.setGameJoining(null);
+			}
 
 			Packets.write(ctx, 0x4323, 0);
 		} catch (Exception e) {
 			logger.error("Exception while handling join failed.", e);
 			Packets.writeError(ctx, 0x4323, 1);
+		}
+	}
+
+	public static void cleanup() {
+		Collection<Game> games = NGames.getGames();
+		for (Game game : games) {
+			int time = (int) Instant.now().getEpochSecond();
+			int timeout = game.getLastUpdate() + 60;
+			if (time > timeout) {
+				logger.info("Cleaning up Game {}: {} - Host {}", game.getId(), game.getName(), game.getHostId());
+				Hosts.cleanupGame(game);
+			}
 		}
 	}
 

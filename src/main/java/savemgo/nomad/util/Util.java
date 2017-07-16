@@ -20,6 +20,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.CharsetUtil;
+import savemgo.nomad.entity.User;
+import savemgo.nomad.instances.NUsers;
 
 public class Util {
 
@@ -214,8 +216,17 @@ public class Util {
 		}
 	}
 
-	public static String getIp(ChannelHandlerContext ctx) {
-		return ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress().getHostAddress();
+	public static String getUserInfo(ChannelHandlerContext ctx) {
+		String ip = ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress().getHostAddress();
+		User user = NUsers.get(ctx.channel());
+		String info = ip;
+		if (user != null) {
+			info += " - User " + user.getId();
+			if (user.getCurrentCharacter() != null) {
+				info += " Chara " + user.getCurrentCharacterId();
+			}
+		}
+		return info;
 	}
 
 }

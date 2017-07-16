@@ -14,6 +14,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.db.DB;
+import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.News;
 import savemgo.nomad.entity.User;
@@ -165,20 +166,56 @@ public class Hub {
 		Packets.write(ctx, 0x43d1, bo);
 	}
 
-	public static void updateLobbyCounts() {
+	public static void initializeLobbies() {
+		Session session = null;
+		try {
+			Collection<Lobby> lobbies = NLobbies.get().values();
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			for (Lobby lobby : lobbies) {
+				Query query = session.createQuery("delete Game where lobby=:lobby");
+				query.setParameter("lobby", lobby);
+				query.executeUpdate();
+			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+		} catch (Exception e) {
+			logger.error("Exception while updating lobby count.", e);
+		}
+	}
+
+	public static void updateLobbies() {
+		Session session = null;
 		try {
 			Collection<Lobby> lobbies = NLobbies.get().values();
 			for (Lobby lobby : lobbies) {
-				List<User> users = NUsers.get((e) -> {
-					if (e.getCurrentCharacterId() != null && e.getCurrentCharacter() != null) {
-						if (e.getCurrentCharacter().getLobbyId() != null) {
-							return e.getCurrentCharacter().getLobbyId() == lobby.getId();
+				List<User> users = NUsers.get((user) -> {
+					try {
+						Character character = user.getCurrentCharacter();
+						if (character != null && character.getLobbyId() != null) {
+							return character.getLobbyId() == lobby.getId();
 						}
+					} catch (Exception ex) {
+						logger.error("Exception while updating lobby counts.", ex);
 					}
 					return false;
 				});
 				lobby.setPlayers(users.size());
+				logger.debug("Updated Lobby {} : {} players.", lobby.getId(), users.size());
 			}
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			for (Lobby lobby : lobbies) {
+				session.update(lobby);
+			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 		} catch (Exception e) {
 			logger.error("Exception while updating lobby count.", e);
 		}

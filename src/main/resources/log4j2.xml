@@ -4,6 +4,23 @@
 		<Console name="Console" target="SYSTEM_OUT">
 			<PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %-14logger{1} %msg%n" />
 		</Console>
+		<RollingFile name="RollingFile" fileName="logs/nomad.log"
+			filePattern="logs/nomad-%d{yyyy-MM-dd-HH}-%i.log.gz">
+			<PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %-14logger{1} %msg%n" />
+			<Policies>
+				<OnStartupTriggeringPolicy />
+				<TimeBasedTriggeringPolicy />
+			</Policies>
+			<DefaultRolloverStrategy>
+				<Delete basePath="${baseDir}" maxDepth="2">
+					<IfFileName glob="*/nomad-*.log.gz" />
+					<IfLastModified age="5d" />
+				</Delete>
+			</DefaultRolloverStrategy>
+		</RollingFile>
+		<Async name="AsyncFile">
+			<AppenderRef ref="RollingFile" />
+		</Async>
 	</Appenders>
 	<Loggers>
 		<Logger name="io.netty" level="ERROR" />
@@ -15,8 +32,9 @@
 		<Logger name="com.mchange.v2.resourcepool" level="ERROR">
 			<AppenderRef ref="Console" />
 		</Logger>
-		<Root level="DEBUG">
-			<AppenderRef ref="Console" />
+		<Root level="TRACE">
+			<AppenderRef ref="Console" level="DEBUG" />
+			<AppenderRef ref="AsyncFile" level="INFO" />
 		</Root>
 	</Loggers>
 </Configuration>

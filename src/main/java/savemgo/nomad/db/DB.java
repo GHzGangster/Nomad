@@ -27,6 +27,10 @@ import savemgo.nomad.entity.CharacterHostSettings;
 import savemgo.nomad.entity.CharacterSetGear;
 import savemgo.nomad.entity.CharacterSetSkills;
 import savemgo.nomad.entity.ConnectionInfo;
+import savemgo.nomad.entity.EventConnectGame;
+import savemgo.nomad.entity.EventCreateGame;
+import savemgo.nomad.entity.EventDisconnectGame;
+import savemgo.nomad.entity.EventEndGame;
 import savemgo.nomad.entity.Game;
 //github.com/GHzGangster/Nomad.git
 import savemgo.nomad.entity.Lobby;
@@ -50,13 +54,13 @@ public class DB {
 			cpds.setUser(user);
 			cpds.setPassword(password);
 
-			cpds.setInitialPoolSize(10);
-			cpds.setMinPoolSize(4);
-			cpds.setAcquireIncrement(4);
-			cpds.setMaxPoolSize(64);
-			
+			cpds.setInitialPoolSize(32);
+			cpds.setMinPoolSize(32);
+			cpds.setAcquireIncrement(8);
+			cpds.setMaxPoolSize(128);
+
 			cpds.setNumHelperThreads(Nomad.DB_WORKERS);
-			
+
 			cpds.setTestConnectionOnCheckout(true);
 		} catch (Exception e) {
 			logger.error("Failed to initialize DB.", e);
@@ -79,6 +83,8 @@ public class DB {
 					.addAnnotatedClass(CharacterEquippedSkills.class).addAnnotatedClass(CharacterFriend.class)
 					.addAnnotatedClass(CharacterHostSettings.class).addAnnotatedClass(CharacterSetGear.class)
 					.addAnnotatedClass(CharacterSetSkills.class).addAnnotatedClass(ConnectionInfo.class)
+					.addAnnotatedClass(EventCreateGame.class).addAnnotatedClass(EventEndGame.class)
+					.addAnnotatedClass(EventConnectGame.class).addAnnotatedClass(EventDisconnectGame.class)
 					.addAnnotatedClass(Game.class).addAnnotatedClass(Lobby.class).addAnnotatedClass(News.class)
 					.addAnnotatedClass(Player.class).addAnnotatedClass(User.class);
 

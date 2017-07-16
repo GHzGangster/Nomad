@@ -118,11 +118,11 @@ public class PacketDecoder extends ChannelInboundHandlerAdapter {
 				}
 
 				if (lengthPayload > 0) {
-					logger.debug("{} - In - Command {} - {} bytes", Util.getIp(ctx), String.format("%04x", command),
+					logger.debug("{} - In - Command {} - {} bytes", Util.getUserInfo(ctx), String.format("%04x", command),
 							lengthPayload);
 					logger.debug(() -> ByteBufUtil.hexDump(packet.getPayload()));
 				} else {
-					logger.debug("{} - In - Command {}", Util.getIp(ctx), String.format("%04x", command));
+					logger.debug("{} - In - Command {}", Util.getUserInfo(ctx), String.format("%04x", command));
 				}
 
 				if (buffer.readableBytes() > 0) {

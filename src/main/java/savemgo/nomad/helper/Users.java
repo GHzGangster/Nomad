@@ -355,6 +355,7 @@ public class Users {
 				Character character = user.getCurrentCharacter();
 				Hibernate.initialize(character);
 				character.setLobby(lobby);
+				character.setLobbyId(lobby.getId());
 				Hibernate.initialize(character.getAppearance());
 				Hibernate.initialize(character.getBlocked());
 				Hibernate.initialize(character.getChatMacros());
@@ -385,35 +386,35 @@ public class Users {
 		Session session = null;
 		try {
 			User user = NUsers.get(ctx.channel());
-			if (user == null) {
-				logger.error("Error while disconnecting from lobby: No user.");
-				return;
-			}
-
-			Character character = user.getCurrentCharacter();
-			if (character != null) {
-				Player player = Hibernate.isInitialized(character.getPlayer()) && character.getPlayer() != null
-						&& character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
-				if (player != null) {
-					Game game = Hibernate.isInitialized(player.getGame()) ? player.getGame() : null;
-					if (game != null && character.getId() == game.getHost().getId()) {
-						// Hosting a game, but disconnected
-						Hosts.quitGame(ctx);
+			if (user != null) {
+				Character character = user.getCurrentCharacter();
+				logger.debug("Disconnecting from lobby {}: Character - {}", user.getId(), character);
+				if (character != null) {
+					Player player = Hibernate.isInitialized(character.getPlayer()) && character.getPlayer() != null
+							&& character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+					logger.debug("Disconnecting from lobby {}: Player - {}", user.getId(), player);
+					if (player != null) {
+						Game game = Hibernate.isInitialized(player.getGame()) ? player.getGame() : null;
+						if (game != null && character.getId() == game.getHost().getId()) {
+							// Hosting a game, but disconnected
+							logger.debug("Disconnecting from lobby {}: Ending game.", user.getId());
+							Hosts.quitGame(ctx);
+						}
 					}
+
+					character.setLobby(null);
+
+					session = DB.getSession();
+					session.beginTransaction();
+
+					session.update(character);
+
+					session.getTransaction().commit();
+					DB.closeSession(session);
 				}
 
-				character.setLobby(null);
-
-				session = DB.getSession();
-				session.beginTransaction();
-
-				session.update(character);
-
-				session.getTransaction().commit();
-				DB.closeSession(session);
+				NUsers.remove(ctx.channel());
 			}
-
-			NUsers.remove(ctx.channel());
 		} catch (Exception e) {
 			logger.error("Exception while disconnecting from lobby.", e);
 			DB.rollbackAndClose(session);
