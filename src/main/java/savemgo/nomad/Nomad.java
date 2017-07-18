@@ -3,15 +3,12 @@ package savemgo.nomad;
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ThreadFactory;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hibernate.Hibernate;
 import org.hibernate.Session;
-import org.hibernate.query.Query;
 
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
@@ -20,7 +17,6 @@ import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
 import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
-import savemgo.nomad.entity.Game;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.helper.Games;
 import savemgo.nomad.helper.Hub;
@@ -28,6 +24,7 @@ import savemgo.nomad.instances.NLobbies;
 import savemgo.nomad.lobby.AccountLobby;
 import savemgo.nomad.lobby.GameLobby;
 import savemgo.nomad.lobby.GateLobby;
+import savemgo.nomad.plugin.PluginHandler;
 
 public class Nomad {
 
@@ -35,30 +32,17 @@ public class Nomad {
 
 	private EventLoopGroup bossGroup, workerGroup;
 
+	public static PluginHandler pluginHandler = new PluginHandler();
+
 	public static boolean BIND_ON_ALL = true;
 	public static int DB_WORKERS = 10;
 	public static int SERVER_WORKERS = 10;
-
-	public static void testHibernate() {
-		Session session = DB.getSession();
-		session.beginTransaction();
-
-		Query<Game> query = session.createQuery("from Game", Game.class);
-		List<Game> games = query.list();
-
-		games.size();
-		Game game = games.get(0);
-
-		Hibernate.initialize(game.getPlayers());
-
-		session.getTransaction().commit();
-		DB.closeSession(session);
-	}
 
 	public Nomad() {
 		Properties properties = new Properties();
 		String key = "";
 		String dbUrl = null, dbUser = null, dbPassword = null;
+		String plugin = null;
 		ArrayList<Integer> lobbyIds = new ArrayList<>();
 		try {
 			properties.load(new FileInputStream(new File("nomad.properties")));
@@ -66,6 +50,7 @@ public class Nomad {
 			dbUrl = properties.getProperty("dbUrl");
 			dbUser = properties.getProperty("dbUser");
 			dbPassword = properties.getProperty("dbPassword");
+			plugin = properties.getProperty("plugin");
 			DB_WORKERS = Integer.parseInt(properties.getProperty("dbWorkers"));
 			SERVER_WORKERS = Integer.parseInt(properties.getProperty("serverWorkers"));
 
@@ -79,12 +64,16 @@ public class Nomad {
 			logger.error("Error while reading properties file.", e);
 		}
 
-		DB.initialize(dbUrl, dbUser, dbPassword);
+		if (plugin != null) {
+			try {
+				pluginHandler.load(new File(plugin));
+				pluginHandler.initialize();
+			} catch (Exception e) {
+				logger.error("Error while loading plugin.");
+			}
+		}
 
-		// testHibernate();
-		// if (Math.sqrt(1) == 1) {
-		// return;
-		// }
+		DB.initialize(dbUrl, dbUser, dbPassword);
 
 		Campbell campbell = Campbell.instance();
 		campbell.setBaseUrl("https://api.savemgo.com/campbell/");
@@ -141,19 +130,21 @@ public class Nomad {
 				NomadServer nServer = new NomadServer(nLobby, bossGroup, workerGroup, executorGroup);
 				servers.add(nServer);
 			}
-			
+
 			for (NomadServer server : servers) {
 				server.start();
 			}
 
 			logger.info("Started server.");
 
-			NomadService service = new NomadService();
-			service.start(() -> {
+			pluginHandler.onStart();
+
+			NomadService service = new NomadService(() -> {
 				Hub.updateLobbies();
 				Games.cleanup();
 				return true;
 			}, 60);
+			service.start();
 
 			ChannelFuture future = servers.get(0).getFuture();
 

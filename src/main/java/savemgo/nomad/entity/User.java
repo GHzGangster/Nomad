@@ -46,6 +46,9 @@ public class User {
 	@Column(name = "banned_until", nullable = true)
 	private Integer bannedUntil;
 
+	@Column(name = "ban_reason", nullable = true)
+	private String banReason;
+
 	@Column(length = 32, name = "mgo2_session", nullable = true)
 	private String session;
 
@@ -67,7 +70,7 @@ public class User {
 	}
 
 	public boolean isBanned() {
-		if (bannedUntil > 0) {
+		if (bannedUntil != null && bannedUntil > 0) {
 			return bannedUntil > Instant.now().getEpochSecond();
 		}
 		return false;
@@ -175,6 +178,14 @@ public class User {
 
 	public void setCharacters(List<Character> characters) {
 		this.characters = characters;
+	}
+
+	public String getBanReason() {
+		return banReason;
+	}
+
+	public void setBanReason(String banReason) {
+		this.banReason = banReason;
 	}
 
 }

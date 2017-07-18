@@ -75,13 +75,42 @@ public class Chat {
 
 			MessageRecipient mr = MessageRecipient.NORMAL;
 
-			if (message.startsWith("/nuser")) {
-				message = "[NUser] " + user.getDisplayName() + " (" + user.getId() + ") - " + character.getName() + " ("
-						+ character.getId() + ") " + "Game: " + game.getId() + " - Team: " + player.getTeam();
+			if (message.startsWith("/kick ")) {
 				mr = MessageRecipient.SELF;
+				if (user.getRole() >= 10) {
+					try {
+						String idStr = message.replaceFirst("/kick ", "");
+						int targetId = Integer.parseInt(idStr);
+						NChannels.process((ch) -> {
+							try {
+								User targetUser = NUsers.get(ch);
+								Character targetCharacter = targetUser.getCurrentCharacter();
+								if (targetCharacter != null) {
+									return targetCharacter.getId() == targetId;
+								}
+							} catch (Exception e) {
+								logger.error("Exception during /kicking character.", e);
+							}
+							return false;
+						}, (ch) -> {
+							try {
+								ch.close();
+							} catch (Exception e) {
+								logger.error("Exception during /kicking character", e);
+							}
+						});
+						message = "Server | Kicked character.";
+					} catch (Exception e) {
+						logger.error("Exception occurred while /kicking character", e);
+						message = "Server | Failed to kick character.";
+					}
+				} else {
+					message = "Server | You do not have permission to use this command.";
+				}
 			} else if (message.startsWith("/global ")) {
 				if (user.getRole() >= 10) {
-					message = "Server | " + message.replaceFirst("/global ", "");
+					String msg = message.replaceFirst("/global ", "");
+					message = "Server | " + msg;
 					mr = MessageRecipient.GLOBAL;
 				} else {
 					message = "Server | You do not have permission to use this command.";

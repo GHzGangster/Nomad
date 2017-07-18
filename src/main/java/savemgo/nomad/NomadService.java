@@ -10,15 +10,20 @@ public class NomadService {
 	private ExecutorService executor = Executors.newSingleThreadExecutor();
 	private Future<?> future = null;
 	private boolean running = false;
+	private Callable<Boolean> callable;
+	private int seconds;
+	private boolean active = false;
 
-	public NomadService() {
-
+	public NomadService(Callable<Boolean> callable, int seconds) {
+		this.callable = callable;
+		this.seconds = seconds;
 	}
 
-	public void start(Callable<Boolean> callable, int seconds) {
+	public void start() {
 		running = true;
 		future = executor.submit(() -> {
-			while (running) {
+			while (running && !active) {
+				active = true;
 				try {
 					boolean result = callable.call();
 					if (!result) {
@@ -29,6 +34,7 @@ public class NomadService {
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
+				active = false;
 			}
 		});
 	}

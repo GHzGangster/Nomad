@@ -88,6 +88,8 @@ public class DB {
 					.addAnnotatedClass(Game.class).addAnnotatedClass(Lobby.class).addAnnotatedClass(News.class)
 					.addAnnotatedClass(Player.class).addAnnotatedClass(User.class);
 
+			Nomad.pluginHandler.addAnnotatedClass(configuration);
+
 			ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
 					.applySettings(configuration.getProperties())
 					.addService(ConnectionProvider.class, new NomadConnectionProvider()).build();
