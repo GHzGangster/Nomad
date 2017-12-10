@@ -6,16 +6,24 @@ import org.apache.logging.log4j.Logger;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import savemgo.nomad.NomadLobby;
+import savemgo.nomad.entity.Character;
+import savemgo.nomad.entity.Game;
 import savemgo.nomad.entity.Lobby;
+import savemgo.nomad.entity.Player;
+import savemgo.nomad.entity.User;
 import savemgo.nomad.helper.Characters;
 import savemgo.nomad.helper.Chat;
+import savemgo.nomad.helper.Clans;
 import savemgo.nomad.helper.Games;
 import savemgo.nomad.helper.Hosts;
 import savemgo.nomad.helper.Hub;
-import savemgo.nomad.helper.Mail;
+import savemgo.nomad.helper.Messages;
 import savemgo.nomad.helper.Users;
+import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
+import savemgo.nomad.plugin.PluginHandler;
 import savemgo.nomad.util.Packets;
+import topsecret.helper.Syringe;
 
 @Sharable
 public class GameLobby extends NomadLobby {
@@ -29,6 +37,13 @@ public class GameLobby extends NomadLobby {
 	@Override
 	public boolean handlePacket(ChannelHandlerContext ctx, Packet in) {
 		int command = in.getCommand();
+
+		int result = PluginHandler.get().getPlugin().handleGameLobbyCommand(ctx, in);
+		if (result == 1) {
+			return true;
+		} else if (result == 0) {
+			return false;
+		}
 
 		switch (command) {
 
@@ -64,6 +79,10 @@ public class GameLobby extends NomadLobby {
 
 		case 0x4114:
 			Characters.updateChatMacros(ctx, in);
+			break;
+
+		case 0x4128:
+			Characters.getPostGameInfo(ctx);
 			break;
 
 		case 0x4130:
@@ -112,17 +131,17 @@ public class GameLobby extends NomadLobby {
 
 		/** Mail */
 		case 0x4820:
-			Mail.getMail(ctx, in);
+			Messages.getMessages(ctx, in);
 			break;
 
 		case 0x4840:
-			Mail.getContents(ctx, in);
+			Messages.getContents(ctx, in);
 			break;
 
 		/** Games */
 		case 0x4300:
-			Games.getList(ctx, getLobby(), 0x4301);
-			// Games.getListFile(ctx, getId(), 0x4301);
+			Games.getList(ctx, getLobby(), 0x4301, in);
+			//Games.getListFile(ctx, getLobby().getId(), 0x4301);
 			break;
 
 		case 0x4312:
@@ -145,7 +164,7 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4310:
-			Hosts.updateSettings(ctx, in, getLobby());
+			Hosts.checkSettings(ctx, in, getLobby());
 			break;
 
 		case 0x4316:
@@ -169,12 +188,11 @@ public class GameLobby extends NomadLobby {
 			break;
 
 		case 0x4380:
-			Hosts.quitGame(ctx);
+			Games.quitGame(ctx, true);
 			break;
 
 		case 0x4390:
-			// Stats
-			Packets.write(ctx, 0x4391);
+			Hosts.updateStats(ctx, in);
 			break;
 
 		case 0x4394:
@@ -207,7 +225,7 @@ public class GameLobby extends NomadLobby {
 
 		case 0x43ca:
 			// Start Round
-			Packets.write(ctx, 0x43cb, 0);
+			Hosts.startRound(ctx);
 			break;
 
 		/** Players */
@@ -244,10 +262,103 @@ public class GameLobby extends NomadLobby {
 		// case 0x4914:
 		// When prompted to re-connect to a game, cancelled
 
-		/** Unknown */
-		case 0x4128:
-			// Player still here after a kicked host passed
-			Packets.write(ctx, 0x4129, 0);
+		/** Messages */
+		case 0x4800:
+			Messages.send(ctx, in);
+			break;
+
+		case 0x4860:
+			Messages.addSent(ctx, in);
+			break;
+
+		/** Clans */
+
+		case 0x4b00:
+			Clans.create(ctx, in);
+			break;
+
+		case 0x4b04:
+			Clans.disband(ctx);
+			break;
+
+		case 0x4b10:
+			Clans.getList(ctx, in);
+			break;
+
+		case 0x4b20:
+			Clans.getInformationMember(ctx, in);
+			break;
+
+		case 0x4b30:
+			Clans.acceptJoin(ctx, in);
+			break;
+
+		case 0x4b32:
+			Clans.declineJoin(ctx, in);
+			break;
+
+		case 0x4b36:
+			Clans.banish(ctx, in);
+			break;
+
+		case 0x4b40:
+			Clans.leave(ctx);
+			break;
+
+		case 0x4b42:
+			Clans.apply(ctx, in);
+			break;
+
+		case 0x4b46:
+			Clans.updateState(ctx, in);
+			break;
+
+		case 0x4b48:
+			Clans.getEmblem(ctx, in, 0x4b49, false); // Lobby
+			break;
+
+		case 0x4b4a:
+			Clans.getEmblem(ctx, in, 0x4b4b, false); // Normal
+			break;
+
+		case 0x4b4c:
+			Clans.getEmblem(ctx, in, 0x4b4d, true); // Work-in-Progress
+			break;
+
+		case 0x4b50:
+			Clans.setEmblem(ctx, in);
+			break;
+
+		case 0x4b52:
+			Clans.getRoster(ctx, in);
+			break;
+
+		case 0x4b60:
+			Clans.transferLeadership(ctx, in);
+			break;
+
+		case 0x4b62:
+			Clans.setEmblemEditor(ctx, in);
+			break;
+
+		case 0x4b64:
+			Clans.updateComment(ctx, in);
+			break;
+
+		case 0x4b66:
+			Clans.updateNotice(ctx, in);
+			break;
+
+		case 0x4b70:
+			Clans.getStats(ctx, in);
+			break;
+
+		case 0x4b80:
+			Clans.getInformation(ctx, in);
+			break;
+
+		case 0x4b90:
+			Clans.search(ctx, in);
 			break;
 
 		default:
@@ -256,6 +367,21 @@ public class GameLobby extends NomadLobby {
 		}
 
 		return true;
+	}
+
+	@Override
+	public void onPing(ChannelHandlerContext ctx) {
+		User user = NUsers.get(ctx.channel());
+		if (user != null) {
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player != null) {
+				Game game = player.getGame();
+				if (character.getId().equals(game.getHostId())) {
+					Hosts.onPing(ctx);
+				}
+			}
+		}
 	}
 
 	@Override

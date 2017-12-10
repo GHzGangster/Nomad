@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_players")
@@ -38,6 +39,9 @@ public class Player {
 
 	@Column(nullable = false)
 	private Integer ping = 0;
+
+	@Version
+	private Integer version;
 
 	public Player() {
 
@@ -98,5 +102,5 @@ public class Player {
 	public void setPing(Integer ping) {
 		this.ping = ping;
 	}
-	
+
 }

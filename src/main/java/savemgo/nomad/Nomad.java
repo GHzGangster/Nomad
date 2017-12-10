@@ -8,16 +8,19 @@ import java.util.concurrent.ThreadFactory;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Hibernate;
 import org.hibernate.Session;
+import org.hibernate.query.Query;
 
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
-import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
+import savemgo.nomad.entity.Clan;
 import savemgo.nomad.entity.Lobby;
+import savemgo.nomad.entity.MessageClanApplication;
 import savemgo.nomad.helper.Games;
 import savemgo.nomad.helper.Hub;
 import savemgo.nomad.instances.NLobbies;
@@ -32,16 +35,53 @@ public class Nomad {
 
 	private EventLoopGroup bossGroup, workerGroup;
 
-	public static PluginHandler pluginHandler = new PluginHandler();
-
 	public static boolean BIND_ON_ALL = true;
 	public static int DB_WORKERS = 10;
 	public static int SERVER_WORKERS = 10;
 
+	public void test() {
+		Session session = null;
+		try {
+			int clanId = 1;
+			boolean isLeader = true;
+			
+			session = DB.getSession();
+			session.beginTransaction();
+
+			Query<Clan> query = session.createQuery(
+					"from Clan c join fetch c.members m join fetch m.character where c.id = :clan", Clan.class);
+			query.setParameter("clan", clanId);
+
+			Clan clan = query.uniqueResult();
+
+			if (clan != null && isLeader) {
+//				Hibernate.initialize(clan.getApplications());
+				
+				Query<MessageClanApplication> queryM = session
+						.createQuery("from MessageClanApplication m join fetch m.character where m.clan = :clan", MessageClanApplication.class);
+				queryM.setParameter("clan", clan);
+				clan.setApplications(queryM.list());
+			}
+
+			if (isLeader) {
+				logger.debug("{} applications (2).", clan.getApplications().size());
+			}
+			
+			session.getTransaction().commit();
+			DB.closeSession(session);
+		} catch (Exception e) {
+			logger.error("Exception occurred!", e);
+			DB.rollbackAndClose(session);
+		}
+		
+		logger.debug("DONE!");
+	}
+	
 	public Nomad() {
 		Properties properties = new Properties();
 		String key = "";
 		String dbUrl = null, dbUser = null, dbPassword = null;
+		int dbPoolMin = 0, dbPoolMax = 0, dbPoolIncrement = 0;
 		String plugin = null;
 		ArrayList<Integer> lobbyIds = new ArrayList<>();
 		try {
@@ -52,6 +92,9 @@ public class Nomad {
 			dbPassword = properties.getProperty("dbPassword");
 			plugin = properties.getProperty("plugin");
 			DB_WORKERS = Integer.parseInt(properties.getProperty("dbWorkers"));
+			dbPoolMin = Integer.parseInt(properties.getProperty("dbPoolMin"));
+			dbPoolMax = Integer.parseInt(properties.getProperty("dbPoolMax"));
+			dbPoolIncrement = Integer.parseInt(properties.getProperty("dbPoolIncrement"));
 			SERVER_WORKERS = Integer.parseInt(properties.getProperty("serverWorkers"));
 
 			String strLobbies = properties.getProperty("lobbies");
@@ -62,27 +105,32 @@ public class Nomad {
 			}
 		} catch (Exception e) {
 			logger.error("Error while reading properties file.", e);
+			return;
 		}
 
 		if (plugin != null) {
 			try {
-				pluginHandler.load(new File(plugin));
-				pluginHandler.initialize();
+				PluginHandler.get().loadPlugin(plugin);
 			} catch (Exception e) {
 				logger.error("Error while loading plugin.");
 			}
 		}
 
-		DB.initialize(dbUrl, dbUser, dbPassword);
+		PluginHandler.get().getPlugin().initialize();
 
-		Campbell campbell = Campbell.instance();
-		campbell.setBaseUrl("https://api.savemgo.com/campbell/");
-		campbell.setApiKey(key);
+		DB.initialize(dbUrl, dbUser, dbPassword, dbPoolMin, dbPoolMax, dbPoolIncrement);
+
+//		if (Math.sqrt(1) == 1) {
+//			test();
+//			return;
+//		}
+		
+		PluginHandler.get().getPlugin().onStart();
 
 		logger.info("Starting server...");
 
 		Session session = null;
-		try {
+		try {			
 			ArrayList<Lobby> lobbies = new ArrayList<>();
 
 			session = DB.getSession();
@@ -137,7 +185,7 @@ public class Nomad {
 
 			logger.info("Started server.");
 
-			pluginHandler.onStart();
+			PluginHandler.get().getPlugin().onStart();
 
 			NomadService service = new NomadService(() -> {
 				Hub.updateLobbies();
@@ -161,8 +209,10 @@ public class Nomad {
 		} finally {
 			logger.info("Shutting down server...");
 
-			bossGroup.shutdownGracefully();
-			workerGroup.shutdownGracefully();
+			if (bossGroup != null && workerGroup != null) {
+				bossGroup.shutdownGracefully();
+				workerGroup.shutdownGracefully();
+			}
 
 			logger.info("Shut down server.");
 		}
@@ -177,7 +227,11 @@ public class Nomad {
 	}
 
 	public static void main(String[] args) {
-		new Nomad();
+		try {
+			new Nomad();
+		} catch (Exception e) {
+			logger.error("Failed to start Nomad.", e);
+		}
 	}
 
 }

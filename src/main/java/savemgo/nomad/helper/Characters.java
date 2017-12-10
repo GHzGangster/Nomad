@@ -4,7 +4,6 @@ import java.io.File;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -14,12 +13,10 @@ import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.query.Query;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import savemgo.nomad.campbell.Campbell;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterAppearance;
@@ -29,10 +26,15 @@ import savemgo.nomad.entity.CharacterEquippedSkills;
 import savemgo.nomad.entity.CharacterFriend;
 import savemgo.nomad.entity.CharacterSetGear;
 import savemgo.nomad.entity.CharacterSetSkills;
+import savemgo.nomad.entity.Clan;
+import savemgo.nomad.entity.ClanMember;
 import savemgo.nomad.entity.ConnectionInfo;
+import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
 import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
+import savemgo.nomad.util.Error;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
 
@@ -46,7 +48,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting character info: No User.");
-				Packets.writeError(ctx, 0x4101, 2);
+				Packets.write(ctx, 0x4101, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -56,19 +58,27 @@ public class Characters {
 
 			byte bytes1[] = { (byte) 0x16, (byte) 0xAE, (byte) 0x03, (byte) 0x38, (byte) 0x01, (byte) 0x3E, (byte) 0x01,
 					(byte) 0x50 };
-			byte bytes2[] = { (byte) 0x00, (byte) 0x97, (byte) 0xFD, (byte) 0xAB, (byte) 0xFC, (byte) 0xFF, (byte) 0xFF,
+			byte bytes2[] = { (byte) 0x00, (byte) 0xB7, (byte) 0xFD, (byte) 0xAB, (byte) 0xFC, (byte) 0xFF, (byte) 0xFF,
 					(byte) 0x7B, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
 					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xCE, (byte) 0x00 };
-			int time1 = currentEpoch - 1, time2 = currentEpoch;
+					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
+			int secondLastLogin = currentEpoch - 1;
+			int lastLogin = currentEpoch;
 
 			bo = ctx.alloc().directBuffer(0x243);
 
 			bo.writeInt(character.getId());
 			Util.writeString(character.getName(), 16, bo);
-			bo.writeBytes(bytes1).writeInt(character.getExp());
+			bo.writeBytes(bytes1);
 
-			bo.writeInt(time1).writeInt(time2).writeZero(1);
+			int exp = 0;
+			if (user.getMainCharacterId() != null && character.getId().equals(user.getMainCharacterId())) {
+				exp = user.getMainExp();
+			} else {
+				exp = user.getAltExp();
+			}
+
+			bo.writeInt(exp).writeInt(secondLastLogin).writeInt(lastLogin).writeZero(1);
 
 			for (CharacterFriend friend : character.getFriends()) {
 				bo.writeInt(friend.getTargetId());
@@ -86,7 +96,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while getting personal info.", e);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4101, 1);
+			Packets.write(ctx, 0x4101, Error.GENERAL);
 		}
 	}
 
@@ -96,13 +106,13 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting gameplay options/ui settings: No User.");
-				Packets.writeError(ctx, 0x4120, 2);
+				Packets.write(ctx, 0x4120, Error.INVALID_SESSION);
 				return;
 			}
 
 			String json = user.getCurrentCharacter().getGameplayOptions();
 			if (json == null) {
-				json = "{\"onlineStatusMode\":0,\"emailFriendsOnly\":false,\"receiveNotices\":true,\"receiveInvites\":true,\"normalViewVerticalInvert\":false,\"normalViewHorizontalInvert\":false,\"normalViewSpeed\":5,\"shoulderViewVerticalInvert\":false,\"shoulderViewHorizontalInvert\":false,\"shoulderViewSpeed\":5,\"firstViewVerticalInvert\":false,\"firstViewHorizontalInvert\":false,\"firstViewSpeed\":5,\"firstViewPlayerDirection\":true,\"viewChangeSpeed\":5,\"firstViewMemory\":false,\"radarLockNorth\":false,\"radarFloorHide\":false,\"hudDisplaySize\":0,\"hudHideNameTags\":false,\"lockOnEnabled\":false,\"weaponSwitchMode\":2,\"weaponSwitchA\":0,\"weaponSwitchB\":1,\"weaponSwitchC\":2,\"itemSwitchMode\":2,\"codec1Name\":\"\",\"codec1a\":1,\"codec1b\":3,\"codec1c\":4,\"codec1d\":2,\"codec2Name\":\"\",\"codec2a\":10,\"codec2b\":12,\"codec2c\":13,\"codec2d\":11,\"codec3Name\":\"\",\"codec3a\":14,\"codec3b\":16,\"codec3c\":17,\"codec3d\":15,\"codec4Name\":\"\",\"codec4a\":5,\"codec4b\":7,\"codec4c\":8,\"codec4d\":6,\"voiceChatRecognitionLevel\":5,\"voiceChatVolume\":5,\"headsetVolume\":5,\"bgmVolume\":10}";
+				json = "{\"onlineStatusMode\":0,\"emailFriendsOnly\":false,\"receiveNotices\":true,\"receiveInvites\":true,\"normalViewVerticalInvert\":false,\"normalViewHorizontalInvert\":false,\"normalViewSpeed\":5,\"shoulderViewVerticalInvert\":false,\"shoulderViewHorizontalInvert\":false,\"shoulderViewSpeed\":5,\"firstViewVerticalInvert\":false,\"firstViewHorizontalInvert\":false,\"firstViewSpeed\":5,\"firstViewPlayerDirection\":true,\"viewChangeSpeed\":5,\"firstViewMemory\":false,\"radarLockNorth\":false,\"radarFloorHide\":false,\"hudDisplaySize\":0,\"hudHideNameTags\":false,\"lockOnEnabled\":false,\"weaponSwitchMode\":2,\"weaponSwitchA\":0,\"weaponSwitchB\":1,\"weaponSwitchC\":2,\"weaponSwitchNow\":0,\"weaponSwitchBefore\":1,\"itemSwitchMode\":2,\"codec1Name\":\"\",\"codec1a\":1,\"codec1b\":3,\"codec1c\":4,\"codec1d\":2,\"codec2Name\":\"\",\"codec2a\":10,\"codec2b\":12,\"codec2c\":13,\"codec2d\":11,\"codec3Name\":\"\",\"codec3a\":14,\"codec3b\":16,\"codec3c\":17,\"codec3d\":15,\"codec4Name\":\"\",\"codec4a\":5,\"codec4b\":7,\"codec4c\":8,\"codec4d\":6,\"voiceChatRecognitionLevel\":5,\"voiceChatVolume\":5,\"headsetVolume\":5,\"bgmVolume\":10}";
 			}
 
 			JsonObject data = Util.jsonDecode(json);
@@ -136,6 +146,9 @@ public class Characters {
 			int weaponSwitchB = data.get("weaponSwitchB").getAsInt();
 			int weaponSwitchC = data.get("weaponSwitchC").getAsInt();
 
+			int weaponSwitchNow = data.get("weaponSwitchNow").getAsInt();
+			int weaponSwitchBefore = data.get("weaponSwitchBefore").getAsInt();
+
 			int itemSwitchMode = data.get("itemSwitchMode").getAsInt();
 
 			String codec1Name = data.get("codec1Name").getAsString();
@@ -168,8 +181,6 @@ public class Characters {
 			int bgmVolume = data.get("bgmVolume").getAsInt();
 
 			viewChangeSpeed -= 1;
-
-			int unknown = 0;// 1;
 
 			int privacyA = 1;
 			privacyA |= (onlineStatusMode & 0b11) << 4;
@@ -221,6 +232,10 @@ public class Characters {
 			int _weaponSwitchB = 0;
 			_weaponSwitchB |= weaponSwitchC & 0b1111;
 
+			int weaponSwitchRecall = 0;
+			weaponSwitchRecall |= weaponSwitchBefore & 0b1111;
+			weaponSwitchRecall |= (weaponSwitchNow & 0b1111) << 4;
+
 			int switchModes = 0;
 			switchModes |= weaponSwitchMode & 0b1111;
 			switchModes |= (itemSwitchMode & 0b1111) << 4;
@@ -236,12 +251,12 @@ public class Characters {
 
 			bo.writeByte(privacyA).writeByte(normalView).writeByte(shoulderView).writeByte(firstView)
 					.writeByte(viewChangeSpeed).writeZero(6).writeByte(switchModes).writeZero(1).writeByte(voiceChatA)
-					.writeByte(voiceChatB).writeByte(_weaponSwitchA).writeByte(_weaponSwitchB).writeByte(unknown)
-					.writeByte(_firstViewMemory).writeByte(privacyB).writeByte(lockOnAndBGM).writeByte(radar)
-					.writeByte(hudDisplay).writeZero(9).writeByte(codec1a).writeByte(codec1b).writeByte(codec1c)
-					.writeByte(codec1d).writeByte(codec2a).writeByte(codec2b).writeByte(codec2c).writeByte(codec2d)
-					.writeByte(codec3a).writeByte(codec3b).writeByte(codec3c).writeByte(codec3d).writeByte(codec4a)
-					.writeByte(codec4b).writeByte(codec4c).writeByte(codec4d);
+					.writeByte(voiceChatB).writeByte(_weaponSwitchA).writeByte(_weaponSwitchB)
+					.writeByte(weaponSwitchRecall).writeByte(_firstViewMemory).writeByte(privacyB)
+					.writeByte(lockOnAndBGM).writeByte(radar).writeByte(hudDisplay).writeZero(9).writeByte(codec1a)
+					.writeByte(codec1b).writeByte(codec1c).writeByte(codec1d).writeByte(codec2a).writeByte(codec2b)
+					.writeByte(codec2c).writeByte(codec2d).writeByte(codec3a).writeByte(codec3b).writeByte(codec3c)
+					.writeByte(codec3d).writeByte(codec4a).writeByte(codec4b).writeByte(codec4c).writeByte(codec4d);
 			Util.writeString(codec1Name, 64, bo);
 			Util.writeString(codec2Name, 64, bo);
 			Util.writeString(codec3Name, 64, bo);
@@ -252,7 +267,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while getting gameplay options/ui settings.", e);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4120, 1);
+			Packets.write(ctx, 0x4120, Error.GENERAL);
 		}
 	}
 
@@ -269,7 +284,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while updating gameplay options: No User.");
-				Packets.writeError(ctx, 0x4111, 2);
+				Packets.write(ctx, 0x4111, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -288,7 +303,7 @@ public class Characters {
 			byte voiceChatB = bi.readByte();
 			byte _weaponSwitchA = bi.readByte();
 			byte _weaponSwitchB = bi.readByte();
-			bi.skipBytes(1);
+			byte weaponSwitchRecall = bi.readByte();
 			byte _firstViewMemory = bi.readByte();
 			byte privacyB = bi.readByte();
 			byte lockOnAndBGM = bi.readByte();
@@ -356,6 +371,9 @@ public class Characters {
 
 			int weaponSwitchC = _weaponSwitchB & 0b1111;
 
+			int weaponSwitchBefore = weaponSwitchRecall & 0b1111;
+			int weaponSwitchNow = (weaponSwitchRecall >> 4) & 0b1111;
+
 			int weaponSwitchMode = switchModes & 0b1111;
 			int itemSwitchMode = (switchModes >> 4) & 0b1111;
 
@@ -393,6 +411,8 @@ public class Characters {
 			data.addProperty("weaponSwitchA", weaponSwitchA);
 			data.addProperty("weaponSwitchB", weaponSwitchB);
 			data.addProperty("weaponSwitchC", weaponSwitchC);
+			data.addProperty("weaponSwitchNow", weaponSwitchNow);
+			data.addProperty("weaponSwitchBefore", weaponSwitchBefore);
 
 			data.addProperty("itemSwitchMode", itemSwitchMode);
 
@@ -439,7 +459,7 @@ public class Characters {
 			logger.error("Exception while updating gameplay options.", e);
 			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4111, 1);
+			Packets.write(ctx, 0x4111, Error.GENERAL);
 		}
 	}
 
@@ -454,7 +474,7 @@ public class Characters {
 			Packets.write(ctx, 0x4113, 0);
 		} catch (Exception e) {
 			logger.error("Exception while updating UI settings.", e);
-			Packets.writeError(ctx, 0x4113, 1);
+			Packets.write(ctx, 0x4113, Error.GENERAL);
 		}
 	}
 
@@ -464,7 +484,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting gameplay options: No User.");
-				Packets.writeError(ctx, 0x4121, 2);
+				Packets.write(ctx, 0x4121, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -510,7 +530,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting updating chat macros: No User.");
-				Packets.writeError(ctx, 0x4111, 2);
+				Packets.write(ctx, 0x4111, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -544,7 +564,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while updating chat macros.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x4111, 1);
+			Packets.write(ctx, 0x4111, Error.GENERAL);
 		}
 	}
 
@@ -554,7 +574,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting personal details: No User.");
-				Packets.writeError(ctx, 0x4122, 2);
+				Packets.write(ctx, 0x4122, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -569,8 +589,9 @@ public class Characters {
 			}
 			CharacterEquippedSkills skills = skillsList.get(0);
 
-			int clanId = 0;
-			String clanName = "";
+			ClanMember clanMember = Util.getFirstOrNull(character.getClanMember());
+			Clan clan = clanMember != null ? clanMember.getClan() : null;
+
 			int time1 = (int) Instant.now().getEpochSecond();
 			int rwd = character.getId();
 
@@ -578,12 +599,18 @@ public class Characters {
 					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
 					(byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x00,
 					(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01 };
-			byte bytes3[] = { (byte) 0x03, (byte) 0x00, (byte) 0xA7, (byte) 0x00, (byte) 0x0D };
+			byte bytes3[] = { (byte) 0x00, (byte) 0xA7, (byte) 0x00, (byte) 0x0D };
 
 			bo = ctx.alloc().directBuffer(0xf5);
 
-			bo.writeInt(clanId);
-			Util.writeString(clanName, 16, bo);
+			if (clan != null) {
+				bo.writeInt(clan.getId());
+				Util.writeString(clan.getName(), 16, bo);
+			} else {
+				bo.writeInt(0);
+				Util.writeString("", 16, bo);
+			}
+
 			bo.writeBytes(bytes1).writeInt(time1);
 			bo.writeByte(appearance.getGender()).writeByte(appearance.getFace()).writeByte(appearance.getUpper())
 					.writeByte(appearance.getLower()).writeByte(appearance.getFacePaint())
@@ -606,27 +633,31 @@ public class Characters {
 			bo.writeInt(skillExp).writeInt(skillExp).writeInt(skillExp).writeInt(skillExp).writeZero(5);
 
 			bo.writeInt(rwd);
+
 			if (character.getComment() != null) {
 				Util.writeString(character.getComment(), 128, bo);
 			} else {
 				bo.writeZero(128);
 			}
-			bo.writeInt(0).writeByte(character.getRank()).writeBytes(bytes3);
+
+			bo.writeByte(character.getRank());
+
+			if (clan != null && clan.getEmblem() != null) {
+				bo.writeByte(3);
+			} else {
+				bo.writeByte(0);
+			}
+
+			bo.writeBytes(bytes3);
 
 			Packets.write(ctx, 0x4122, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting personal info.", e);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4122, 1);
+			Packets.write(ctx, 0x4122, Error.GENERAL);
 		}
 	}
 
-	/**
-	 * TODO: Update
-	 * 
-	 * @param ctx
-	 * @param in
-	 */
 	public static void updatePersonalInfo(ChannelHandlerContext ctx, Packet in) {
 		ByteBuf bo = null;
 		Session session = null;
@@ -634,7 +665,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while updating personal info: No User.");
-				Packets.writeError(ctx, 0x4131, 2);
+				Packets.write(ctx, 0x4131, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -748,7 +779,7 @@ public class Characters {
 			logger.error("Exception while updating personal info.", e);
 			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4131, 1);
+			Packets.write(ctx, 0x4131, Error.GENERAL);
 		}
 	}
 
@@ -764,7 +795,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting gear: No User.");
-				Packets.writeError(ctx, 0x4124, 2);
+				Packets.write(ctx, 0x4124, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -792,7 +823,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while getting gear.", e);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4124, 1);
+			Packets.write(ctx, 0x4124, Error.GENERAL);
 		}
 	}
 
@@ -802,7 +833,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting skills: No User.");
-				Packets.writeError(ctx, 0x4125, 2);
+				Packets.write(ctx, 0x4125, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -826,7 +857,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while getting skills.", e);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4125, 1);
+			Packets.write(ctx, 0x4125, Error.GENERAL);
 		}
 	}
 
@@ -836,7 +867,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting skill sets: No User.");
-				Packets.writeError(ctx, 0x4140, 2);
+				Packets.write(ctx, 0x4140, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -875,7 +906,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while getting skill sets.", e);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4140, 1);
+			Packets.write(ctx, 0x4140, Error.GENERAL);
 		}
 	}
 
@@ -885,7 +916,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while updating skill sets: No User.");
-				Packets.writeError(ctx, 0x4141, 2);
+				Packets.write(ctx, 0x4141, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -936,7 +967,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while updating skill sets.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x4141, 1);
+			Packets.write(ctx, 0x4141, Error.GENERAL);
 		}
 	}
 
@@ -946,7 +977,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting skill sets: No User.");
-				Packets.writeError(ctx, 0x4142, 2);
+				Packets.write(ctx, 0x4142, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -1011,7 +1042,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while updating gear sets: No User.");
-				Packets.writeError(ctx, 0x4143, 2);
+				Packets.write(ctx, 0x4143, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -1085,7 +1116,7 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while updating gear sets.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x4143, 1);
+			Packets.write(ctx, 0x4143, Error.GENERAL);
 		}
 	}
 
@@ -1095,7 +1126,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while updating connection info: No User.");
-				Packets.writeError(ctx, 0x4701, 2);
+				Packets.write(ctx, 0x4701, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -1135,13 +1166,84 @@ public class Characters {
 		} catch (Exception e) {
 			logger.error("Exception while updating connection info.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x4701, 1);
+			Packets.write(ctx, 0x4701, Error.GENERAL);
 		}
 	}
 
-	public static void getMail(ChannelHandlerContext ctx, Packet in) {
-		Packets.write(ctx, 0x4821, 0);
-		Packets.write(ctx, 0x4823, 0);
+	public static void getPostGameInfo(ChannelHandlerContext ctx) {
+		ByteBuf bo = null;
+		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting post-game info: No User.");
+				Packets.write(ctx, 0x4129, Error.INVALID_SESSION);
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+
+			ClanMember clanMember = character.getClanMember().size() > 0 ? character.getClanMember().get(0) : null;
+			Clan clan = clanMember != null ? clanMember.getClan() : null;
+
+			int experience = 0;
+			if (user.getMainCharacterId() != null && character.getId().equals(user.getMainCharacterId())) {
+				experience = user.getMainExp();
+			} else {
+				experience = user.getAltExp();
+			}
+
+			int rwd = character.getId();
+			int gradePoints = experience;
+
+			int unk1 = 0;
+			int unk2 = 0xffffff;
+			short unk3 = 0;
+			byte unk4 = 1;
+
+			bo = ctx.alloc().directBuffer(0x8b);
+
+			bo.writeInt(0).writeByte(character.getRank());
+
+			bo.writeInt(experience);
+
+			bo.writeZero(1);
+
+			int numSkills = 25;
+			bo.writeInt(numSkills);
+			for (int i = 1; i <= numSkills; i++) {
+				int exp;
+				if (i == 17 || i == 20 || i == 22) {
+					exp = 0x2000;
+				} else {
+					exp = 0x6000;
+				}
+				bo.writeByte(i).writeShort(exp).writeZero(1);
+			}
+
+			bo.writeInt(unk1).writeInt(gradePoints).writeInt(unk2);
+
+			if (clan != null) {
+				bo.writeInt(clan.getId());
+			} else {
+				bo.writeInt(0);
+			}
+
+			bo.writeShort(unk3).writeByte(unk4);
+
+			if (clan != null && clan.getEmblem() != null) {
+				bo.writeByte(3);
+			} else {
+				bo.writeByte(0);
+			}
+
+			bo.writeInt(rwd).writeZero(1);
+
+			Packets.write(ctx, 0x4129, bo);
+		} catch (Exception e) {
+			logger.error("Exception while getting post-game info.", e);
+			Util.releaseBuffer(bo);
+			Packets.write(ctx, 0x4129, Error.GENERAL);
+		}
 	}
 
 	public static void getFriendsBlockedList(ChannelHandlerContext ctx, Packet in) {
@@ -1151,7 +1253,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting friends/blocked list: No User.");
-				Packets.writeError(ctx, 0x4581, 2);
+				Packets.write(ctx, 0x4581, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -1161,16 +1263,14 @@ public class Characters {
 			int type = bi.readByte();
 
 			if (type == 0) {
-				List<CharacterFriend> friends = character.getFriends();
-
 				session = DB.getSession();
 				session.beginTransaction();
 
-				for (CharacterFriend friend : friends) {
-					session.update(friend);
-					Hibernate.initialize(friend.getTarget());
-					Hibernate.initialize(friend.getTarget().getLobby());
-				}
+				Query<CharacterFriend> query = session.createQuery(
+						"from CharacterFriend f join fetch f.target t join fetch t.lobby where f.character = :chara",
+						CharacterFriend.class);
+				query.setParameter("chara", character);
+				List<CharacterFriend> friends = query.list();
 
 				session.getTransaction().commit();
 				DB.closeSession(session);
@@ -1182,23 +1282,42 @@ public class Characters {
 					String gameHostName = "";
 					int gameType = 0;
 
+					User userFriend = NUsers.getByCharacterId(friend.getTargetId());
+					if (userFriend != null) {
+						// User is online
+						Character characterFriend = userFriend.getCurrentCharacter();
+						if (characterFriend != null) {
+							Player player = characterFriend.getPlayer().size() > 0 ? characterFriend.getPlayer().get(0)
+									: null;
+							if (player != null) {
+								Game game = player.getGame();
+								gameId = game.getId();
+								gameHostName = game.getHost().getName();
+								gameType = game.getLobby().getSubtype();
+							}
+						}
+					}
+
 					bo.writeInt(friend.getTargetId());
 					Util.writeString(friend.getTarget().getName(), 16, bo);
-					bo.writeShort(friend.getTarget().getLobbyId()).writeInt(gameId);
+					if (friend.getTarget().getLobby() != null) {
+						bo.writeShort(friend.getTarget().getLobbyId());
+					} else {
+						bo.writeShort(0);
+					}
+					bo.writeInt(gameId);
 					Util.writeString(gameHostName, 16, bo);
 					bo.writeByte(gameType);
 				});
 			} else {
-				List<CharacterBlocked> blocked = character.getBlocked();
-
 				session = DB.getSession();
 				session.beginTransaction();
 
-				for (CharacterBlocked block : blocked) {
-					session.update(block);
-					Hibernate.initialize(block.getTarget());
-					Hibernate.initialize(block.getTarget().getLobby());
-				}
+				Query<CharacterBlocked> query = session.createQuery(
+						"from CharacterBlocked f join fetch f.target t join fetch t.lobby where f.character = :chara",
+						CharacterBlocked.class);
+				query.setParameter("chara", character);
+				List<CharacterBlocked> blocked = query.list();
 
 				session.getTransaction().commit();
 				DB.closeSession(session);
@@ -1210,10 +1329,30 @@ public class Characters {
 					String gameHostName = "";
 					int gameType = 0;
 
+					User userBlock = NUsers.getByCharacterId(block.getTargetId());
+					if (userBlock != null) {
+						// User is online
+						Character characterBlock = userBlock.getCurrentCharacter();
+						if (characterBlock != null) {
+							Player player = characterBlock.getPlayer().size() > 0 ? characterBlock.getPlayer().get(0)
+									: null;
+							if (player != null) {
+								Game game = player.getGame();
+								gameId = game.getId();
+								gameHostName = game.getHost().getName();
+								gameType = game.getLobby().getSubtype();
+							}
+						}
+					}
+
 					bo.writeInt(block.getTargetId());
 					Util.writeString(block.getTarget().getName(), 16, bo);
-					int lobbyId = block.getTarget().getLobbyId() != null ? block.getTarget().getLobbyId() : 0;
-					bo.writeShort(lobbyId).writeInt(gameId);
+					if (block.getTarget().getLobby() != null) {
+						bo.writeShort(block.getTarget().getLobbyId());
+					} else {
+						bo.writeShort(0);
+					}
+					bo.writeInt(gameId);
 					Util.writeString(gameHostName, 16, bo);
 					bo.writeByte(gameType);
 				});
@@ -1224,7 +1363,8 @@ public class Characters {
 			Packets.write(ctx, 0x4583, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting friends/blocked list.", e);
-			Packets.writeError(ctx, 0x4581, 1);
+			DB.rollbackAndClose(session);
+			Packets.write(ctx, 0x4581, Error.GENERAL);
 			Util.releaseBuffers(payloads);
 		}
 	}
@@ -1237,13 +1377,13 @@ public class Characters {
 			Packets.write(ctx, 0x4683, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting match history.", e);
-			Packets.writeError(ctx, 0x4681, 1);
+			Packets.write(ctx, 0x4681, Error.GENERAL);
 		}
 	}
 
 	public static void getPersonalStats(ChannelHandlerContext ctx, Packet in) {
 		try {
-			Packets.writeError(ctx, 0x4103, 0xff);
+			Packets.write(ctx, 0x4103, Error.NOT_IMPLEMENTED);
 			// ByteBuf bo1 = Util.readFile(new File("personal-stats-1.bin"));
 			// ByteBuf bo2 = Util.readFile(new File("personal-stats-2.bin"));
 			// ByteBuf bo3 = Util.readFile(new File("personal-stats-3.bin"));
@@ -1252,7 +1392,7 @@ public class Characters {
 			// Packets.write(ctx, 0x4107, bo3);
 		} catch (Exception e) {
 			logger.error("Exception while getting personal stats.", e);
-			Packets.writeError(ctx, 0x4103, 1);
+			Packets.write(ctx, 0x4103, Error.GENERAL);
 		}
 	}
 
@@ -1269,7 +1409,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while adding to friends/blocked list: No User.");
-				Packets.writeError(ctx, 0x4502, 2);
+				Packets.write(ctx, 0x4502, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -1287,6 +1427,12 @@ public class Characters {
 			if (type == 0) {
 				List<CharacterFriend> friends = character.getFriends();
 
+				if (friends.size() >= 64) {
+					logger.error("Error while adding to friends/blocked list: Friends list is full.");
+					Packets.writeError(ctx, 0x4502, 10);
+					return;
+				}
+
 				CharacterFriend friend = new CharacterFriend();
 				friend.setCharacterId(character.getId());
 				friend.setCharacter(character);
@@ -1298,6 +1444,12 @@ public class Characters {
 			} else {
 				List<CharacterBlocked> blocked = character.getBlocked();
 
+				if (blocked.size() >= 64) {
+					logger.error("Error while adding to friends/blocked list: Blocked list is full.");
+					Packets.writeError(ctx, 0x4502, 10);
+					return;
+				}
+
 				CharacterBlocked block = new CharacterBlocked();
 				block.setCharacterId(character.getId());
 				block.setCharacter(character);
@@ -1305,7 +1457,6 @@ public class Characters {
 				block.setTarget(target);
 
 				session.saveOrUpdate(block);
-				session.refresh(block);
 				blocked.add(block);
 			}
 
@@ -1319,8 +1470,9 @@ public class Characters {
 			Packets.write(ctx, 0x4502, bo);
 		} catch (Exception e) {
 			logger.error("Exception while adding to friends/blocked list.", e);
+			DB.rollbackAndClose(session);
 			Util.safeRelease(bo);
-			Packets.writeError(ctx, 0x4502, 1);
+			Packets.write(ctx, 0x4502, Error.GENERAL);
 		}
 	}
 
@@ -1331,7 +1483,7 @@ public class Characters {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while removing from friends/blocked list: No User.");
-				Packets.writeError(ctx, 0x4512, 2);
+				Packets.write(ctx, 0x4512, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -1392,7 +1544,8 @@ public class Characters {
 			Packets.write(ctx, 0x4512, bo);
 		} catch (Exception e) {
 			logger.error("Exception while removing from friends/blocked list.", e);
-			Packets.writeError(ctx, 0x4512, 1);
+			DB.rollbackAndClose(session);
+			Packets.write(ctx, 0x4512, Error.GENERAL);
 			Util.safeRelease(bo);
 		}
 	}
@@ -1418,7 +1571,9 @@ public class Characters {
 			query.setParameter("name", name);
 			List<Character> characters = query.list();
 
-			Hibernate.initialize(characters);
+			for (Character character : characters) {
+				Hibernate.initialize(character.getLobby());
+			}
 
 			session.getTransaction().commit();
 			DB.closeSession(session);
@@ -1432,8 +1587,13 @@ public class Characters {
 
 				bo.writeInt(character.getId());
 				Util.writeString(character.getName(), 16, bo);
-				bo.writeShort(character.getLobbyId());
-				Util.writeString(character.getLobby().getName(), 16, bo);
+				if (character.getLobby() != null) {
+					bo.writeShort(character.getLobbyId());
+					Util.writeString(character.getLobby().getName(), 16, bo);
+				} else {
+					bo.writeShort(0);
+					Util.writeString("", 16, bo);
+				}
 				bo.writeInt(gameId);
 				Util.writeString(gameHostName, 16, bo);
 				bo.writeByte(gameType);
@@ -1444,7 +1604,7 @@ public class Characters {
 			Packets.write(ctx, 0x4603, 0);
 		} catch (Exception e) {
 			logger.error("Exception while searching for player.", e);
-			Packets.writeError(ctx, 0x4601, 1);
+			Packets.write(ctx, 0x4601, Error.GENERAL);
 			Util.releaseBuffers(payloads);
 		}
 	}
@@ -1456,7 +1616,7 @@ public class Characters {
 			Packets.write(ctx, 0x4221, bo1);
 		} catch (Exception e) {
 			logger.error("Exception while getting character card.", e);
-			Packets.writeError(ctx, 0x4221, 1);
+			Packets.write(ctx, 0x4221, Error.GENERAL);
 		}
 	}
 
@@ -1467,7 +1627,7 @@ public class Characters {
 			Packets.write(ctx, 0x4687, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting official game history.", e);
-			Packets.writeError(ctx, 0x4685, 1);
+			Packets.write(ctx, 0x4685, Error.GENERAL);
 		}
 	}
 

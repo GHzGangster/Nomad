@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_characters_skills")
@@ -49,6 +50,9 @@ public class CharacterEquippedSkills {
 	
 	@Column(name = "level_4", nullable = false)
 	private Integer level4 = 0;
+	
+	@Version
+	private Integer version;
 	
 	public CharacterEquippedSkills() {
 

@@ -3,6 +3,7 @@ package savemgo.nomad.db;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
@@ -26,6 +27,9 @@ import savemgo.nomad.entity.CharacterFriend;
 import savemgo.nomad.entity.CharacterHostSettings;
 import savemgo.nomad.entity.CharacterSetGear;
 import savemgo.nomad.entity.CharacterSetSkills;
+import savemgo.nomad.entity.Clan;
+import savemgo.nomad.entity.MessageClanApplication;
+import savemgo.nomad.entity.ClanMember;
 import savemgo.nomad.entity.ConnectionInfo;
 import savemgo.nomad.entity.EventConnectGame;
 import savemgo.nomad.entity.EventCreateGame;
@@ -37,16 +41,27 @@ import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.News;
 import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
+import savemgo.nomad.plugin.PluginHandler;
 
 public class DB {
 
 	private static final Logger logger = LogManager.getLogger(DB.class);
 
+	private static final Class<?>[] entityClasses = { Character.class, CharacterAppearance.class,
+			CharacterBlocked.class, CharacterChatMacro.class, CharacterEquippedSkills.class, CharacterFriend.class,
+			CharacterHostSettings.class, CharacterSetGear.class, CharacterSetSkills.class, Clan.class,
+			MessageClanApplication.class, ClanMember.class, ConnectionInfo.class, EventCreateGame.class, EventEndGame.class,
+			EventConnectGame.class, EventDisconnectGame.class, Game.class, Lobby.class, News.class, Player.class,
+			User.class };
+
 	private static ComboPooledDataSource cpds;
 
 	private static SessionFactory sessionFactory;
 
-	public static boolean initialize(String url, String user, String password) {
+	public static HashMap<Session, String> sessionCheckouts = new HashMap<>();
+
+	public static boolean initialize(String url, String user, String password, int minPoolSize, int maxPoolSize,
+			int poolIncrement) {
 		try {
 			cpds = new ComboPooledDataSource();
 			cpds.setDriverClass("com.mysql.cj.jdbc.Driver");
@@ -54,10 +69,10 @@ public class DB {
 			cpds.setUser(user);
 			cpds.setPassword(password);
 
-			cpds.setInitialPoolSize(32);
-			cpds.setMinPoolSize(32);
-			cpds.setAcquireIncrement(8);
-			cpds.setMaxPoolSize(128);
+			cpds.setInitialPoolSize(minPoolSize);
+			cpds.setMinPoolSize(minPoolSize);
+			cpds.setAcquireIncrement(poolIncrement);
+			cpds.setMaxPoolSize(maxPoolSize);
 
 			cpds.setNumHelperThreads(Nomad.DB_WORKERS);
 
@@ -78,17 +93,11 @@ public class DB {
 			props.put("hibernate.current_session_context_class", "thread");
 			configuration.setProperties(props);
 
-			configuration.addAnnotatedClass(Character.class).addAnnotatedClass(CharacterAppearance.class)
-					.addAnnotatedClass(CharacterBlocked.class).addAnnotatedClass(CharacterChatMacro.class)
-					.addAnnotatedClass(CharacterEquippedSkills.class).addAnnotatedClass(CharacterFriend.class)
-					.addAnnotatedClass(CharacterHostSettings.class).addAnnotatedClass(CharacterSetGear.class)
-					.addAnnotatedClass(CharacterSetSkills.class).addAnnotatedClass(ConnectionInfo.class)
-					.addAnnotatedClass(EventCreateGame.class).addAnnotatedClass(EventEndGame.class)
-					.addAnnotatedClass(EventConnectGame.class).addAnnotatedClass(EventDisconnectGame.class)
-					.addAnnotatedClass(Game.class).addAnnotatedClass(Lobby.class).addAnnotatedClass(News.class)
-					.addAnnotatedClass(Player.class).addAnnotatedClass(User.class);
+			for (Class<?> clazz : entityClasses) {
+				configuration.addAnnotatedClass(clazz);
+			}
 
-			Nomad.pluginHandler.addAnnotatedClass(configuration);
+			PluginHandler.get().getPlugin().addAnnotatedClass(configuration);
 
 			ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
 					.applySettings(configuration.getProperties())
@@ -117,7 +126,7 @@ public class DB {
 			conn = cpds.getConnection();
 			time = System.currentTimeMillis() - time;
 			if (time >= 1000L) {
-				logger.debug("Took a long time to get a connection: {} ms", time);
+				logger.warn("Took a long time to get a connection: {} ms", time);
 			}
 		} catch (Exception e) {
 			logger.error("Failed to get Connection from DB.", e);
@@ -166,21 +175,31 @@ public class DB {
 	}
 
 	public static Session getSession() {
-		return getSessionFactory().getCurrentSession();
+		String callerName = Thread.currentThread().getStackTrace()[2].getMethodName();
+		Session session = getSessionFactory().getCurrentSession();
+		if (session.getTransaction().isActive()) {
+			logger.error("Transaction is active on checkout! Last checked out by: {}", sessionCheckouts.get(session));
+		}
+		sessionCheckouts.put(session, callerName);
+		return session;
 	}
 
 	public static void closeSession(Session session) {
 		if (session != null && session.isOpen()) {
+			if (session.getTransaction().isActive()) {
+				logger.error("Transaction is active on close! Last checked out by: {}", sessionCheckouts.get(session));
+			}
 			try {
 				session.close();
 			} catch (Exception e) {
 				// Ignored
 			}
 		}
+		sessionCheckouts.remove(session);
 	}
 
 	public static void rollbackAndClose(Session session) {
-		if (session != null && session.getTransaction() != null) {
+		if (session != null && session.getTransaction() != null && session.getTransaction().isActive()) {
 			try {
 				session.getTransaction().rollback();
 			} catch (Exception e) {

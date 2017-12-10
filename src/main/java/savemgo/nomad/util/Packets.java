@@ -14,7 +14,7 @@ public class Packets {
 	}
 	
 	public static void flush(ChannelHandlerContext ctx) {
-		flush(ctx);
+		flush(ctx.channel());
 	}
 	
 	public static void handleMutliElementPayload(ChannelHandlerContext ctx, int elements, int maxElements,
@@ -108,6 +108,14 @@ public class Packets {
 	
 	public static void writeError(ChannelHandlerContext ctx, int command, int result) {
 		writeError(ctx.channel(), command, result);
+	}
+	
+	public static void write(ChannelHandlerContext ctx, int command, Error error) {
+		if (error.isOfficial()) {
+			write(ctx.channel(), command, error.getCode());
+		} else {
+			writeError(ctx.channel(), command, error.getCode());
+		}
 	}
 
 }

@@ -1,6 +1,8 @@
 package savemgo.nomad.helper;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -16,14 +18,15 @@ import savemgo.nomad.crypto.Crypto;
 import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
 import savemgo.nomad.entity.CharacterAppearance;
-import savemgo.nomad.entity.Game;
+import savemgo.nomad.entity.MessageClanApplication;
+import savemgo.nomad.entity.ClanMember;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.Player;
 import savemgo.nomad.entity.User;
 import savemgo.nomad.instances.NChannels;
 import savemgo.nomad.instances.NUsers;
-import savemgo.nomad.lobby.GameLobby;
 import savemgo.nomad.packet.Packet;
+import savemgo.nomad.util.Error;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
 
@@ -80,14 +83,14 @@ public class Users {
 
 			if (user == null) {
 				logger.error("Error while checking session: Bad session.");
-				Packets.write(ctx, 0x3004, 1);
+				Packets.write(ctx, 0x3004, Error.INVALID_SESSION);
 				return false;
 			}
 
 			boolean okay = isCharaId ? id == user.getCurrentCharacterId() : id == user.getId();
 			if (!okay) {
-				logger.error("Error while checking session: Bad id.");
-				Packets.write(ctx, 0x3004, 1);
+				logger.error("Error while checking session: Bad id ... {} {} -- {} {}", isCharaId, id, user.getCurrentCharacterId(), user.getId());
+				Packets.write(ctx, 0x3004, Error.INVALID_SESSION);
 				return false;
 			}
 
@@ -103,7 +106,7 @@ public class Users {
 			}
 
 			if (!onLobbyConnected(ctx, lobby, user)) {
-				Packets.write(ctx, 0x3004, 2);
+				Packets.write(ctx, 0x3004, Error.INVALID_SESSION);
 				return false;
 			}
 
@@ -111,7 +114,7 @@ public class Users {
 		} catch (Exception e) {
 			logger.error("Exception while checking session.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x3004, 1);
+			Packets.write(ctx, 0x3004, Error.GENERAL);
 			return false;
 		}
 		return true;
@@ -124,15 +127,16 @@ public class Users {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting character list: No User.");
-				Packets.writeError(ctx, 0x3049, 2);
+				Packets.write(ctx, 0x3049, Error.INVALID_SESSION);
 				return;
 			}
 
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<Character> query = session
-					.createQuery("from Character as c inner join fetch c.appearance where user=:user", Character.class);
+			Query<Character> query = session.createQuery(
+					"from Character as c inner join fetch c.appearance where user=:user and c.active=1",
+					Character.class);
 			query.setParameter("user", user);
 			List<Character> characters = query.list();
 
@@ -141,30 +145,53 @@ public class Users {
 
 			int numCharacters = characters.size();
 
+			if (user.getMainCharacterId() != null) {
+				for (int i = 0; i < numCharacters; i++) {
+					Character character = characters.get(i);
+					if (character.getId().equals(user.getMainCharacterId())) {
+						characters.remove(i);
+						characters.add(0, character);
+					}
+				}
+			}
+			
 			bo = ctx.alloc().directBuffer(0x1d7);
 			bo.writeInt(0).writeByte(user.getSlots()).writeByte(numCharacters).writeZero(1);
 
+			// Make MAIN show up first!
+			
 			for (int i = 0; i < numCharacters; i++) {
-				Character chara = characters.get(i);
-				CharacterAppearance app = chara.getAppearance().get(0);
+				Character character = characters.get(i);
+				CharacterAppearance appearance = Util.getFirstOrNull(character.getAppearance());
+
+				String name = null;
+				if (user.getMainCharacterId() != null && character.getId().equals(user.getMainCharacterId())) {
+					name = "*" + character.getName();
+				} else {
+					name = character.getName();
+				}
 
 				if (i == 0) {
-					Util.writeString(chara.getName(), 16, bo);
+					Util.writeString(name, 16, bo);
 					bo.writeZero(1);
 				} else {
 					bo.writeInt(i);
 				}
 
-				bo.writeInt(chara.getId());
-				Util.writeString(chara.getName(), 16, bo);
-				bo.writeByte(app.getGender()).writeByte(app.getFace()).writeByte(app.getUpper())
-						.writeByte(app.getLower()).writeByte(app.getFacePaint()).writeByte(app.getUpperColor())
-						.writeByte(app.getLowerColor()).writeByte(app.getVoice()).writeByte(app.getPitch()).writeZero(4)
-						.writeByte(app.getHead()).writeByte(app.getChest()).writeByte(app.getHands())
-						.writeByte(app.getWaist()).writeByte(app.getFeet()).writeByte(app.getAccessory1())
-						.writeByte(app.getAccessory2()).writeByte(app.getHeadColor()).writeByte(app.getChestColor())
-						.writeByte(app.getHandsColor()).writeByte(app.getWaistColor()).writeByte(app.getFeetColor())
-						.writeByte(app.getAccessory1Color()).writeByte(app.getAccessory2Color()).writeZero(1);
+				bo.writeInt(character.getId());
+				Util.writeString(name, 16, bo);
+				bo.writeByte(appearance.getGender()).writeByte(appearance.getFace()).writeByte(appearance.getUpper())
+						.writeByte(appearance.getLower()).writeByte(appearance.getFacePaint())
+						.writeByte(appearance.getUpperColor()).writeByte(appearance.getLowerColor())
+						.writeByte(appearance.getVoice()).writeByte(appearance.getPitch()).writeZero(4)
+						.writeByte(appearance.getHead()).writeByte(appearance.getChest())
+						.writeByte(appearance.getHands()).writeByte(appearance.getWaist())
+						.writeByte(appearance.getFeet()).writeByte(appearance.getAccessory1())
+						.writeByte(appearance.getAccessory2()).writeByte(appearance.getHeadColor())
+						.writeByte(appearance.getChestColor()).writeByte(appearance.getHandsColor())
+						.writeByte(appearance.getWaistColor()).writeByte(appearance.getFeetColor())
+						.writeByte(appearance.getAccessory1Color()).writeByte(appearance.getAccessory2Color())
+						.writeZero(1);
 			}
 
 			byte[] bytes1 = { (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x07, (byte) 0x00, (byte) 0x03,
@@ -181,7 +208,7 @@ public class Users {
 			logger.error("Exception while getting character list.", e);
 			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x3049, 1);
+			Packets.write(ctx, 0x3049, Error.GENERAL);
 		}
 	}
 
@@ -192,7 +219,7 @@ public class Users {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while getting character list: No User.");
-				Packets.writeError(ctx, 0x3102, 2);
+				Packets.write(ctx, 0x3102, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -227,9 +254,44 @@ public class Users {
 			int accessory1Color = bi.readByte();
 			int accessory2Color = bi.readByte();
 
+			if (name.startsWith(":#") || name.startsWith("GM_") || name.startsWith("GM-") || name.startsWith("GM.")
+					|| name.startsWith("GM,")) {
+				logger.error("Error while creating character: Reserved prefix.");
+				Packets.write(ctx, 0x3102, Error.CHAR_NAMEPREFIX);
+				return;
+			} else if (name.equalsIgnoreCase("SaveMGO")) {
+				logger.error("Error while creating character: Reserved name.");
+				Packets.write(ctx, 0x3102, Error.CHAR_NAMERESERVED);
+				return;
+			} else if (!Util.checkName(name)) {
+				logger.error("Error while creating character: Invalid name.");
+				Packets.write(ctx, 0x3102, Error.CHAR_NAMEINVALID);
+				return;
+			}
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			Query<Character> queryC = session.createQuery("from Character c where c.name = :name", Character.class);
+			queryC.setParameter("name", name);
+			Character characterWithName = queryC.uniqueResult();
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			if (characterWithName != null) {
+				logger.error("Error while creating character: Name is taken.");
+				Packets.write(ctx, 0x3102, Error.CHAR_NAMETAKEN);
+				return;
+			}
+
+			long time = Instant.now().getEpochSecond();
+
 			Character character = new Character();
 			character.setName(name);
 			character.setUser(user);
+			character.setCreationTime((int) time);
+			character.setActive(1);
 
 			CharacterAppearance appearance = new CharacterAppearance();
 			character.setAppearance(Arrays.asList(appearance));
@@ -259,6 +321,9 @@ public class Users {
 			appearance.setFacePaint(facePaint);
 
 			user.setCurrentCharacter(character);
+			if (user.getMainCharacterId() == null) {
+				user.setMainCharacter(character);
+			}
 
 			session = DB.getSession();
 			session.beginTransaction();
@@ -278,7 +343,7 @@ public class Users {
 			logger.error("Exception while creating character.", e);
 			DB.rollbackAndClose(session);
 			Util.safeRelease(bo);
-			Packets.writeError(ctx, 0x3102, 1);
+			Packets.write(ctx, 0x3102, Error.GENERAL);
 		}
 	}
 
@@ -288,7 +353,7 @@ public class Users {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while selecting character: No User.");
-				Packets.writeError(ctx, 0x3104, 2);
+				Packets.write(ctx, 0x3104, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -298,13 +363,24 @@ public class Users {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<Character> query = session.createQuery("from Character where user=:user", Character.class);
+			Query<Character> query = session.createQuery("from Character c where user=:user and c.active=1",
+					Character.class);
 			query.setParameter("user", user);
 			List<Character> characters = query.list();
-
+			
 			int numCharacters = characters.size();
 			if (index < 0 || index > numCharacters - 1) {
 				index = 0;
+			}
+			
+			if (user.getMainCharacterId() != null) {
+				for (int i = 0; i < numCharacters; i++) {
+					Character character = characters.get(i);
+					if (character.getId().equals(user.getMainCharacterId())) {
+						characters.remove(i);
+						characters.add(0, character);
+					}
+				}
 			}
 
 			Character character = characters.get(index);
@@ -319,27 +395,89 @@ public class Users {
 		} catch (Exception e) {
 			logger.error("Exception while selecting character.", e);
 			DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x3104, 1);
+			Packets.write(ctx, 0x3104, Error.GENERAL);
 		}
 	}
 
 	public static void deleteCharacter(ChannelHandlerContext ctx, Packet in) {
-		// Session session = null;
+		Session session = null;
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while deleting character: No User.");
+				Packets.write(ctx, 0x3106, Error.INVALID_SESSION);
+				return;
+			}
+
 			ByteBuf bi = in.getPayload();
 			int index = bi.readByte();
 
-			// session = DB.getSession();
-			// session.beginTransaction();
-			//
-			// session.getTransaction().commit();
-			// DB.closeSession(session);
+			session = DB.getSession();
+			session.beginTransaction();
+
+			Query<Character> query = session.createQuery(
+					"from Character as c inner join fetch c.appearance where user=:user and c.active=1",
+					Character.class);
+			query.setParameter("user", user);
+			List<Character> characters = query.list();
+			int numCharacters = characters.size();
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			if (index < 0 || numCharacters - 1 < index) {
+				index = numCharacters - 1;
+			}
+			
+			if (user.getMainCharacterId() != null) {
+				for (int i = 0; i < numCharacters; i++) {
+					Character character = characters.get(i);
+					if (character.getId().equals(user.getMainCharacterId())) {
+						characters.remove(i);
+						characters.add(0, character);
+					}
+				}
+			}
+
+			Character character = characters.get(index);
+
+			boolean canDelete = true;
+			if (character.getCreationTime() != null) {
+				long time = Instant.now().getEpochSecond();
+				long canDeleteTime = character.getCreationTime() + 7 * 24 * 60 * 60;
+				if (time < canDeleteTime) {
+					canDelete = false;
+				}
+			}
+
+			if (!canDelete) {
+				logger.error("Error while deleting character: Can't delete yet.");
+				Packets.write(ctx, 0x3106, Error.CHAR_CANTDELETEYET);
+				return;
+			}
+
+			character.setActive(0);
+			character.setOldName(character.getName());
+			character.setName(":#" + character.getId());
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			session.update(character);
+
+			if (user.getMainCharacterId() != null && character.getId().equals(user.getMainCharacterId())) {
+				User aUser = session.get(User.class, user.getId());
+				aUser.setMainCharacter(null);
+			}
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
 
 			Packets.write(ctx, 0x3106, 0);
 		} catch (Exception e) {
 			logger.error("Exception while deleting character.", e);
-			// DB.rollbackAndClose(session);
-			Packets.writeError(ctx, 0x3106, 1);
+			DB.rollbackAndClose(session);
+			Packets.write(ctx, 0x3106, Error.GENERAL);
 		}
 	}
 
@@ -359,6 +497,12 @@ public class Users {
 				Hibernate.initialize(character.getAppearance());
 				Hibernate.initialize(character.getBlocked());
 				Hibernate.initialize(character.getChatMacros());
+				Hibernate.initialize(character.getClanApplication());
+				Hibernate.initialize(character.getClanMember());
+				ClanMember clanMember = character.getClanMember().size() > 0 ? character.getClanMember().get(0) : null;
+				if (clanMember != null) {
+					Hibernate.initialize(clanMember.getClan());
+				}
 				Hibernate.initialize(character.getConnectionInfo());
 				Hibernate.initialize(character.getFriends());
 				Hibernate.initialize(character.getHostSettings());
@@ -373,6 +517,7 @@ public class Users {
 			session.getTransaction().commit();
 			DB.closeSession(session);
 
+			user.setChannel(ctx.channel());
 			NChannels.add(ctx.channel());
 			NUsers.add(ctx.channel(), user);
 		} catch (Exception e) {
@@ -389,17 +534,13 @@ public class Users {
 			if (user != null) {
 				Character character = user.getCurrentCharacter();
 				logger.debug("Disconnecting from lobby {}: Character - {}", user.getId(), character);
-				if (character != null) {
+				if (user.getCurrentCharacterId() != null && character != null) {
 					Player player = Hibernate.isInitialized(character.getPlayer()) && character.getPlayer() != null
 							&& character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
 					logger.debug("Disconnecting from lobby {}: Player - {}", user.getId(), player);
 					if (player != null) {
-						Game game = Hibernate.isInitialized(player.getGame()) ? player.getGame() : null;
-						if (game != null && character.getId() == game.getHost().getId()) {
-							// Hosting a game, but disconnected
-							logger.debug("Disconnecting from lobby {}: Ending game.", user.getId());
-							Hosts.quitGame(ctx);
-						}
+						logger.debug("Disconnecting from lobby {}: Quitting game.", user.getId());
+						Games.quitGame(ctx, false);
 					}
 
 					character.setLobby(null);
@@ -417,6 +558,51 @@ public class Users {
 			}
 		} catch (Exception e) {
 			logger.error("Exception while disconnecting from lobby.", e);
+			DB.rollbackAndClose(session);
+		}
+	}
+
+	public static void updateUserClan(ChannelHandlerContext ctx) {
+		Session session = null;
+		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			if (user.getCurrentCharacterId() == null || character == null) {
+				return;
+			}
+
+			session = DB.getSession();
+			session.beginTransaction();
+
+			Query<MessageClanApplication> queryA = session.createQuery(
+					"from MessageClanApplication a join fetch a.clan where a.character = :character",
+					MessageClanApplication.class);
+			queryA.setParameter("character", character);
+
+			MessageClanApplication application = queryA.uniqueResult();
+
+			Query<ClanMember> query = session.createQuery(
+					"from ClanMember m join fetch m.clan where m.character = :character", ClanMember.class);
+			query.setParameter("character", character);
+
+			ClanMember member = query.uniqueResult();
+
+			session.getTransaction().commit();
+			DB.closeSession(session);
+
+			List<MessageClanApplication> applications = new ArrayList<>();
+			applications.add(application);
+			character.setClanApplication(applications);
+
+			List<ClanMember> members = new ArrayList<>();
+			members.add(member);
+			character.setClanMember(members);
+		} catch (Exception e) {
+			logger.error("Exception while updating user clan.", e);
 			DB.rollbackAndClose(session);
 		}
 	}

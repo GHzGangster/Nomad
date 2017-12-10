@@ -23,8 +23,8 @@ public class EventConnectGame {
 	private Integer gameId;
 
 	@Column(name = "chara", nullable = false)
-	private Integer charaId;
-
+	private Integer charaId;	
+	
 	public EventConnectGame() {
 
 	}

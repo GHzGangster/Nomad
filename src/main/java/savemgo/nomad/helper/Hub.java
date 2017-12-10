@@ -21,6 +21,7 @@ import savemgo.nomad.entity.User;
 import savemgo.nomad.instances.NLobbies;
 import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
+import savemgo.nomad.util.Error;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
 
@@ -55,7 +56,7 @@ public class Hub {
 		} catch (Exception e) {
 			logger.error("Exception while getting game lobby info.", e);
 			Util.releaseBuffers(payloads);
-			Packets.writeError(ctx, 0x4901, 1);
+			Packets.write(ctx, 0x4901, Error.GENERAL);
 		}
 	}
 
@@ -88,7 +89,7 @@ public class Hub {
 		} catch (Exception e) {
 			logger.error("Exception while getting lobby list.", e);
 			Util.releaseBuffers(payloads);
-			Packets.writeError(ctx, 0x2002, 1);
+			Packets.write(ctx, 0x2002, Error.GENERAL);
 		}
 	}
 
@@ -100,7 +101,7 @@ public class Hub {
 			session = DB.getSession();
 			session.beginTransaction();
 
-			Query<News> query = session.createQuery("from News", News.class);
+			Query<News> query = session.createQuery("from News n order by n.id desc", News.class);
 			List<News> news = query.list();
 
 			session.getTransaction().commit();
@@ -133,7 +134,7 @@ public class Hub {
 			logger.error("Exception while getting news.", e);
 			DB.rollbackAndClose(session);
 			Util.releaseBuffers(bos);
-			Packets.writeError(ctx, 0x2009, 1);
+			Packets.write(ctx, 0x2009, Error.GENERAL);
 		}
 	}
 
@@ -147,7 +148,7 @@ public class Hub {
 			Packets.write(ctx, 0x4991, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting game entry info.", e);
-			Packets.writeError(ctx, 0x4991, 1);
+			Packets.write(ctx, 0x4991, Error.GENERAL);
 			Util.releaseBuffer(bo);
 		}
 	}

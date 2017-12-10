@@ -21,6 +21,10 @@ public class NGames {
 	public static boolean remove(Game game) {
 		return games.remove(game.getId()) != null;
 	}
+	
+	public static boolean exists(Game game) {
+		return games.contains(game);
+	}
 
 	public static Collection<Game> getGames() {
 		return games.values();

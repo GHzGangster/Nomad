@@ -6,6 +6,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_news")
@@ -27,6 +28,9 @@ public class News {
 
 	@Column(nullable = false, length = 885)
 	private String message;
+	
+	@Version
+	private Integer version;
 	
 	public News() {
 		

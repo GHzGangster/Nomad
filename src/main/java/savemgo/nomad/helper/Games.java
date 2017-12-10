@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hibernate.Session;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -16,8 +17,14 @@ import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+import savemgo.nomad.db.DB;
 import savemgo.nomad.entity.Character;
+import savemgo.nomad.entity.CharacterBlocked;
+import savemgo.nomad.entity.CharacterFriend;
 import savemgo.nomad.entity.ConnectionInfo;
+import savemgo.nomad.entity.EventConnectGame;
+import savemgo.nomad.entity.EventDisconnectGame;
+import savemgo.nomad.entity.EventEndGame;
 import savemgo.nomad.entity.Game;
 import savemgo.nomad.entity.Lobby;
 import savemgo.nomad.entity.Player;
@@ -25,12 +32,13 @@ import savemgo.nomad.entity.User;
 import savemgo.nomad.instances.NGames;
 import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
+import savemgo.nomad.util.Error;
 import savemgo.nomad.util.Packets;
 import savemgo.nomad.util.Util;
 
 public class Games {
 
-	private static final Logger logger = LogManager.getLogger(Games.class);
+	private static final Logger logger = LogManager.getLogger();
 
 	public static void getListFile(ChannelHandlerContext ctx, int lobby, int command) {
 		try {
@@ -40,7 +48,7 @@ public class Games {
 			Packets.write(ctx, command + 2, 0);
 		} catch (Exception e) {
 			logger.error("Exception while getting game list.", e);
-			Packets.writeError(ctx, command, 1);
+			Packets.write(ctx, command, Error.GENERAL);
 		}
 	}
 
@@ -50,7 +58,7 @@ public class Games {
 			Packets.write(ctx, 0x4313, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting game info.", e);
-			Packets.writeError(ctx, 0x4313, 1);
+			Packets.write(ctx, 0x4313, Error.GENERAL);
 		}
 	}
 
@@ -60,18 +68,45 @@ public class Games {
 			Packets.write(ctx, 0x4321, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting host connection info.", e);
-			Packets.writeError(ctx, 0x4321, 1);
+			Packets.write(ctx, 0x4321, Error.GENERAL);
 		}
 	}
 
-	public static void getList(ChannelHandlerContext ctx, Lobby lobby, int command) {
+	public static void getList(ChannelHandlerContext ctx, Lobby lobby, int command, Packet in) {
 		AtomicReference<ByteBuf[]> payloads = new AtomicReference<>();
 		try {
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while getting game list: No user.");
+				Packets.write(ctx, command, Error.INVALID_SESSION);
+				return;
+			}
+			
+			ByteBuf bi = in.getPayload();
+			/**
+			 * 00 00 02 00 - Clan Room
+			 * 
+			 * 00 00 00 02 - Free Battle
+			 */
+			int type = bi.readInt();
+
+			Character character = user.getCurrentCharacter();
+
 			Collection<Game> games = NGames.getGames();
 			ArrayList<Game> gamez = new ArrayList<>();
 			for (Game game : games) {
-				if (game.getLobbyId() == lobby.getId()) {
-					gamez.add(game);
+				if (type == 0x200) {
+					// Show clan rooms
+					
+					if (game.getName().startsWith("CLAN_ROOM_")) {
+						gamez.add(game);
+					}
+				} else {
+					// Normal
+					
+					if (game.getLobby() == lobby && !game.getName().startsWith("CLAN_ROOM_")) {
+						gamez.add(game);
+					}
 				}
 			}
 
@@ -113,9 +148,17 @@ public class Games {
 				int idleKick = common.get("idleKick").getAsInt();
 
 				JsonArray jGames = Util.jsonDecodeArray(jsonGames);
-				JsonArray jGame = jGames.get(game.getCurrentGame()).getAsJsonArray();
-				int rule = jGame.get(0).getAsInt();
-				int map = jGame.get(1).getAsInt();
+
+				int currentGame = game.getCurrentGame();
+				int rule = 0, map = 0;
+				if (currentGame <= jGames.size()) {
+					JsonArray jGame = jGames.get(game.getCurrentGame()).getAsJsonArray();
+					rule = jGame.get(0).getAsInt();
+					map = jGame.get(1).getAsInt();
+				} else {
+					rule = 0;
+					map = 0;
+				}
 
 				int hostScore = game.getHost().getHostScore();
 				int hostVotes = game.getHost().getHostVotes();
@@ -123,10 +166,35 @@ public class Games {
 				int averageExperience = 0;
 				int numPlayers = players.size();
 				for (Player player : players) {
-					averageExperience += player.getCharacter().getExp();
+					Character pCharacter = player.getCharacter();
+					User pUser = pCharacter.getUser();
+					
+					int exp = 0;
+					if (pUser.getMainCharacterId() != null && pCharacter.getId().equals(pUser.getMainCharacterId())) {
+						exp = pUser.getMainExp();
+					} else {
+						exp = pUser.getAltExp();
+					}
+					
+					averageExperience += exp;
 				}
 				if (numPlayers > 0) {
 					averageExperience /= numPlayers;
+				}
+
+				boolean hasFriend = false, hasBlocked = false;
+				for (Player player : game.getPlayers()) {
+					if (!hasFriend && character.getFriends().stream()
+							.anyMatch(e -> e.getTargetId().equals(player.getCharacterId()))) {
+						hasFriend = true;
+					}
+					if (!hasBlocked && character.getBlocked().stream()
+							.anyMatch(e -> e.getTargetId().equals(player.getCharacterId()))) {
+						hasBlocked = true;
+					}
+					if (hasFriend && hasBlocked) {
+						break;
+					}
 				}
 
 				int hostOptions = 0;
@@ -150,6 +218,8 @@ public class Games {
 				commonB |= teamKillKick > 0 ? 0b10000000 : 0;
 
 				int friendBlock = 0;
+				friendBlock |= hasFriend ? 0b1 : 0;
+				friendBlock |= hasBlocked ? 0b10 : 0;
 
 				int unknown = 0x8;
 
@@ -168,7 +238,7 @@ public class Games {
 		} catch (Exception e) {
 			logger.error("Exception while getting game list.", e);
 			Util.releaseBuffers(payloads);
-			Packets.writeError(ctx, command, 1);
+			Packets.write(ctx, command, Error.GENERAL);
 		}
 	}
 
@@ -181,10 +251,10 @@ public class Games {
 			Game game = NGames.get(gameId);
 			if (game == null) {
 				logger.error("Error while getting game details: No game.");
-				Packets.writeError(ctx, 0x4313, 2);
+				Packets.write(ctx, 0x4313, Error.INVALID_SESSION);
 				return;
 			}
-			
+
 			String jsonGames = game.getGames();
 			String jsonCommon = game.getCommon();
 			String jsonRules = game.getRules();
@@ -224,7 +294,17 @@ public class Games {
 			int averageExperience = 0;
 			int numPlayers = players.size();
 			for (Player player : players) {
-				averageExperience += player.getCharacter().getExp();
+				Character pCharacter = player.getCharacter();
+				User pUser = pCharacter.getUser();
+				
+				int exp = 0;
+				if (pUser.getMainCharacterId() != null && pCharacter.getId().equals(pUser.getMainCharacterId())) {
+					exp = pUser.getMainExp();
+				} else {
+					exp = pUser.getAltExp();
+				}
+				
+				averageExperience += exp;
 			}
 			if (numPlayers > 0) {
 				averageExperience /= numPlayers;
@@ -480,18 +560,23 @@ public class Games {
 					.writeByte(scapRounds).writeByte(raceTime).writeByte(raceRounds).writeZero(1)
 					.writeByte(hostOptionsExtraTimeFlags).writeZero(4);
 
-			Player playerHost = null;
-			for (Player player : players) {
-				if (player.getCharacterId() == game.getHostId()) {
-					playerHost = player;
-					break;
-				}
-			}
-
+			Player playerHost = players.stream().filter(e -> e.getCharacterId().equals(game.getHostId())).findAny().orElse(null);
 			if (playerHost != null) {
 				bo.writeInt(playerHost.getCharacterId());
 				Util.writeString(playerHost.getCharacter().getName(), 0x10, bo);
-				bo.writeInt(playerHost.getPing()).writeInt(playerHost.getCharacter().getExp());
+				bo.writeInt(playerHost.getPing());
+				
+				Character pCharacter = playerHost.getCharacter();
+				User pUser = pCharacter.getUser();
+				
+				int exp = 0;
+				if (pUser.getMainCharacterId() != null && pCharacter.getId().equals(pUser.getMainCharacterId())) {
+					exp = pUser.getMainExp();
+				} else {
+					exp = pUser.getAltExp();
+				}
+				
+				bo.writeInt(exp);
 			}
 
 			for (Player player : players) {
@@ -500,7 +585,19 @@ public class Games {
 				}
 				bo.writeInt(player.getCharacterId());
 				Util.writeString(player.getCharacter().getName(), 0x10, bo);
-				bo.writeInt(player.getPing()).writeInt(player.getCharacter().getExp());
+				bo.writeInt(player.getPing());
+				
+				Character pCharacter = player.getCharacter();
+				User pUser = pCharacter.getUser();
+				
+				int exp = 0;
+				if (pUser.getMainCharacterId() != null && pCharacter.getId().equals(pUser.getMainCharacterId())) {
+					exp = pUser.getMainExp();
+				} else {
+					exp = pUser.getAltExp();
+				}
+				
+				bo.writeInt(exp);
 			}
 
 			Util.padTo(0x36d, bo);
@@ -508,18 +605,19 @@ public class Games {
 			Packets.write(ctx, 0x4313, bo);
 		} catch (Exception e) {
 			logger.error("Exception while getting game info.", e);
-			Packets.writeError(ctx, 0x4313, 1);
+			Packets.write(ctx, 0x4313, Error.GENERAL);
 			Util.releaseBuffer(bo);
 		}
 	}
 
 	public static void join(ChannelHandlerContext ctx, Packet in) {
+		Session session = null;
 		ByteBuf bo = null;
 		try {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while joining game: No user.");
-				Packets.writeError(ctx, 0x4321, 2);
+				Packets.write(ctx, 0x4321, Error.INVALID_SESSION);
 				return;
 			}
 
@@ -536,9 +634,23 @@ public class Games {
 				return;
 			}
 
+			Character host = game.getHost();
+			boolean isBlocked = host.getBlocked().stream().anyMatch(e -> e.getTargetId().equals(character.getId()));
+			if (isBlocked) {
+				logger.error("Error while joining game: Blocked by host.");
+				Packets.writeError(ctx, 0x4321, 0x11);
+				return;
+			}
+
 			if (game.getPassword() != null && !password.equals(game.getPassword())) {
 				logger.error("Error while joining game: Bad password. User: {} Orig: {}", password, game.getPassword());
 				Packets.writeError(ctx, 0x4321, 3);
+				return;
+			}
+
+			if (game.getPlayers().size() >= game.getMaxPlayers()) {
+				logger.error("Error while joining game: Game is full.");
+				Packets.writeError(ctx, 0x4321, 0x10);
 				return;
 			}
 
@@ -558,8 +670,14 @@ public class Games {
 			int rule = mapRule.get(0).getAsInt();
 			int map = mapRule.get(1).getAsInt();
 
+			Player oldPlayer = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (oldPlayer != null) {
+				gameRemovePlayer(game, character.getId(), false);
+			}
+
 			character.setGameJoining(game.getId());
-			logger.debug("Joining game: {}", Util.getUserInfo(ctx), character.getGameJoining());
+			logger.info("{} ({}) is joining game: {}", character.getName(), character.getId(),
+					character.getGameJoining());
 
 			bo = ctx.alloc().directBuffer(0x2b);
 
@@ -573,8 +691,9 @@ public class Games {
 			Packets.write(ctx, 0x4321, bo);
 		} catch (Exception e) {
 			logger.error("Exception while joining game.", e);
+			DB.rollbackAndClose(session);
 			Util.releaseBuffer(bo);
-			Packets.writeError(ctx, 0x4321, 1);
+			Packets.write(ctx, 0x4321, Error.GENERAL);
 		}
 	}
 
@@ -583,34 +702,292 @@ public class Games {
 			User user = NUsers.get(ctx.channel());
 			if (user == null) {
 				logger.error("Error while handling join failed: No user.");
-				Packets.writeError(ctx, 0x4323, 2);
+				Packets.write(ctx, 0x4323, Error.INVALID_SESSION);
 				return;
 			}
 
 			Character character = user.getCurrentCharacter();
 
 			if (character.getGameJoining() != null) {
-				logger.debug("Failed to join game: {}", Util.getUserInfo(ctx), character.getGameJoining());
+				logger.info("{} ({}) failed to join game: {}", character.getName(), character.getId(),
+						character.getGameJoining());
 				character.setGameJoining(null);
 			}
 
 			Packets.write(ctx, 0x4323, 0);
 		} catch (Exception e) {
 			logger.error("Exception while handling join failed.", e);
-			Packets.writeError(ctx, 0x4323, 1);
+			Packets.write(ctx, 0x4323, Error.GENERAL);
 		}
 	}
 
 	public static void cleanup() {
-		Collection<Game> games = NGames.getGames();
+		ArrayList<Game> games = new ArrayList<>(NGames.getGames());
 		for (Game game : games) {
 			int time = (int) Instant.now().getEpochSecond();
 			int timeout = game.getLastUpdate() + 60;
 			if (time > timeout) {
-				logger.info("Cleaning up Game {}: {} - Host {}", game.getId(), game.getName(), game.getHostId());
-				Hosts.cleanupGame(game);
+				logger.info("Cleaning up Game {} ({}) - Host {}", game.getName(), game.getId(), game.getHostId());
+				gameEnd(game);
 			}
 		}
+	}
+
+	public static void quitGame(ChannelHandlerContext ctx, boolean sendResponse) {
+		Session session = null;
+		try {
+			if (sendResponse) {
+				Packets.write(ctx, 0x4381, 0);
+			}
+
+			User user = NUsers.get(ctx.channel());
+			if (user == null) {
+				logger.error("Error while quitting game: No user.");
+				return;
+			}
+
+			Character character = user.getCurrentCharacter();
+			Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+			if (player == null) {
+				logger.error("Error while quitting game: Not in a game.");
+				return;
+			}
+
+			Game game = player.getGame();
+			if (character.getId().equals(game.getHost().getId())) {
+				// Hosting
+				gameEnd(game);
+			} else {
+				// Not hosting
+				gameRemovePlayer(game, character.getId(), true);
+			}
+		} catch (Exception e) {
+			logger.error("Exception while ending game.", e);
+			DB.rollbackAndClose(session);
+		}
+	}
+
+	public static int gameAddPlayer(Game game, int charaId, boolean checkJoining) {
+		Session session = null;
+		try {
+			logger.info("GameAddPlayer {} ({}) - Chara {}", game.getName(), game.getId(), charaId);
+
+			synchronized (game.getPlayerLock()) {
+				logger.info("GameAddPlayer {} ({}) - Chara {} | Got lock.", game.getName(), game.getId(), charaId);
+
+				User user = NUsers.getByCharacterId(charaId);
+				if (user == null) {
+					logger.error("GameAddPlayer {} ({}) - Chara {} | User isn't online.", game.getName(), game.getId(),
+							charaId);
+					return -2;
+				}
+
+				Character character = user.getCurrentCharacter();
+				if (character == null) {
+					logger.error("GameAddPlayer {} ({}) - Chara {} | Character isn't online.", game.getName(),
+							game.getId(), charaId);
+					return -3;
+				}
+
+				if (checkJoining && !character.getGameJoining().equals(game.getId())) {
+					logger.error("GameAddPlayer {} ({}) - Chara {} | Not joining this game.", game.getName(),
+							game.getId(), charaId);
+					return -4;
+				}
+
+				Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+				if (player == null) {
+					if (game.getPlayers().size() >= game.getMaxPlayers()) {
+						logger.info("GameAddPlayer {} ({}) - Chara {} | Game is full.", game.getName(), game.getId(),
+								charaId);
+						return -10;
+					}
+				} else {
+					if (player.getGame() == game) {
+						logger.info("GameAddPlayer {} ({}) - Chara {} | Already in game.", game.getName(), game.getId(),
+								charaId);
+						return 1;
+					}
+
+					logger.info("GameAddPlayer {} ({}) - Chara {} | Removing from old game: {} ({})", game.getName(),
+							game.getId(), charaId, player.getGame().getName(), player.getGame().getId());
+
+					session = DB.getSession();
+					session.beginTransaction();
+
+					session.remove(player);
+
+					session.getTransaction().commit();
+					DB.closeSession(session);
+
+					player.getGame().removePlayer(player);
+					character.getPlayer().clear();
+				}
+
+				player = new Player();
+				player.setCharacter(character);
+				player.setCharacterId(character.getId());
+				player.setGame(game);
+				player.setGameId(game.getId());
+				player.setPing(0);
+				player.setTeam(0);
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.save(player);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+
+				game.addPlayer(player);
+				character.getPlayer().add(player);
+				character.setGameJoining(null);
+				
+				EventConnectGame event = new EventConnectGame();
+				event.setTime((int) Instant.now().getEpochSecond());
+				event.setGameId(game.getId());
+				event.setCharaId(character.getId());
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.save(event);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+			}
+
+			logger.info("GameAddPlayer {} ({}) - Chara {} | Successfully added!", game.getName(), game.getId(),
+					charaId);
+		} catch (Exception e) {
+			logger.error("GameAddPlayer {} ({}) - Chara {} | Exception caught.", game.getName(), game.getId(), charaId,
+					e);
+			DB.rollbackAndClose(session);
+			return -1;
+		}
+		return 0;
+	}
+
+	public static int gameRemovePlayer(Game game, int charaId, boolean checkGame) {
+		Session session = null;
+		try {
+			logger.info("GameRemovePlayer {} ({}) - Chara {}", game.getName(), game.getId(), charaId);
+
+			synchronized (game.getPlayerLock()) {
+				logger.info("GameRemovePlayer {} ({}) - Chara {} | Got lock.", game.getName(), game.getId(), charaId);
+
+				User user = NUsers.getByCharacterId(charaId);
+				if (user == null) {
+					logger.error("GameRemovePlayer {} ({}) - Chara {} | User isn't online.", game.getName(),
+							game.getId(), charaId);
+					return -2;
+				}
+
+				Character character = user.getCurrentCharacter();
+				if (character == null) {
+					logger.error("GameRemovePlayer {} ({}) - Chara {} | Character isn't online.", game.getName(),
+							game.getId(), charaId);
+					return -3;
+				}
+
+				Player player = character.getPlayer().size() > 0 ? character.getPlayer().get(0) : null;
+				if (player == null) {
+					logger.error("GameRemovePlayer {} ({}) - Chara {} | Character isn't in this game.", game.getName(),
+							game.getId(), charaId);
+					return 1;
+				}
+
+				if (checkGame && player.getGame() != game) {
+					logger.error("GameRemovePlayer {} ({}) - Chara {} | Character isn't in this game.", game.getName(),
+							game.getId(), charaId);
+					return -4;
+				}
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.remove(player);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+
+				player.getGame().removePlayer(player);
+				character.getPlayer().clear();
+
+				EventDisconnectGame event = new EventDisconnectGame();
+				event.setTime((int) Instant.now().getEpochSecond());
+				event.setGameId(game.getId());
+				event.setCharaId(charaId);
+
+				session = DB.getSession();
+				session.beginTransaction();
+
+				session.save(event);
+
+				session.getTransaction().commit();
+				DB.closeSession(session);
+			}
+
+			logger.info("GameRemovePlayer {} ({}) - Chara {} | Successfully removed!", game.getName(), game.getId(),
+					charaId);
+		} catch (Exception e) {
+			logger.error("GameRemovePlayer {} ({}) - Chara {} | Exception caught.", game.getName(), game.getId(),
+					charaId, e);
+			DB.rollbackAndClose(session);
+			return -1;
+		}
+		return 0;
+	}
+
+	public static int gameEnd(Game game) {
+		Session session = null;
+		try {
+			logger.info("GameEnd {} ({})", game.getName(), game.getId());
+
+			synchronized (game.getEndGameLock()) {
+				logger.info("GameEnd {} ({}) | Got lock.", game.getName(), game.getId());
+
+				if (NGames.exists(game)) {
+					Chat.sendServerMessageToGame("This game is being removed due to inactivity.", game);
+					Chat.sendServerMessageToGame("If this is in error, please report this to staff.", game);
+					
+					ArrayList<Player> playersCopy = new ArrayList<>(game.getPlayers());
+					for (Player aPlayer : playersCopy) {
+						gameRemovePlayer(game, aPlayer.getCharacterId(), true);
+					}
+
+					session = DB.getSession();
+					session.beginTransaction();
+
+					session.remove(game);
+
+					session.getTransaction().commit();
+					DB.closeSession(session);
+
+					NGames.remove(game);
+
+					EventEndGame event = new EventEndGame();
+					event.setTime((int) Instant.now().getEpochSecond());
+					event.setGameId(game.getId());
+
+					session = DB.getSession();
+					session.beginTransaction();
+
+					session.save(event);
+
+					session.getTransaction().commit();
+					DB.closeSession(session);
+				}
+			}
+
+			logger.info("Ended Game {} ({}).", game.getName(), game.getId());
+		} catch (Exception e) {
+			logger.error("GameEnd {} ({}) | Exception caught.", game.getName(), game.getId(), e);
+			DB.rollbackAndClose(session);
+			return -1;
+		}
+		return 0;
 	}
 
 }

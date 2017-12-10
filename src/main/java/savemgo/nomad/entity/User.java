@@ -15,6 +15,9 @@ import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Transient;
+import javax.persistence.Version;
+
+import io.netty.channel.Channel;
 
 @Entity
 @Table(name = "users")
@@ -52,6 +55,9 @@ public class User {
 	@Column(length = 32, name = "mgo2_session", nullable = true)
 	private String session;
 
+	@Column(name = "mgo2_session_iscfw", nullable = false)
+	private Boolean sessionIsCfw;
+
 	@Column(name = "mgo2_slots", nullable = false)
 	private Integer slots = 3;
 
@@ -62,8 +68,30 @@ public class User {
 	@ManyToOne(fetch = FetchType.LAZY, optional = true)
 	private Character currentCharacter;
 
+	@Column(name = "mgo2_main", nullable = true, updatable = false, insertable = false)
+	private Integer mainCharacterId;
+
+	@JoinColumn(name = "mgo2_main", nullable = true)
+	@ManyToOne(fetch = FetchType.LAZY, optional = true)
+	private Character mainCharacter;
+
+	@Column(name = "mgo2_main_exp", nullable = false)
+	private Integer mainExp = 0;
+
+	@Column(name = "mgo2_alt_exp", nullable = false)
+	private Integer altExp = 0;
+
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "user", orphanRemoval = true)
 	private List<Character> characters;
+
+	@Version
+	private Integer version;
+
+	@Transient
+	private Channel channel;
+
+	@Transient
+	private String sessionHostSettings;
 
 	public User() {
 
@@ -186,6 +214,62 @@ public class User {
 
 	public void setBanReason(String banReason) {
 		this.banReason = banReason;
+	}
+
+	public Boolean getSessionIsCfw() {
+		return sessionIsCfw;
+	}
+
+	public void setSessionIsCfw(Boolean sessionIsCfw) {
+		this.sessionIsCfw = sessionIsCfw;
+	}
+
+	public Channel getChannel() {
+		return channel;
+	}
+
+	public void setChannel(Channel channel) {
+		this.channel = channel;
+	}
+
+	public String getSessionHostSettings() {
+		return sessionHostSettings;
+	}
+
+	public void setSessionHostSettings(String sessionHostSettings) {
+		this.sessionHostSettings = sessionHostSettings;
+	}
+
+	public Integer getMainCharacterId() {
+		return mainCharacterId;
+	}
+
+	public void setMainCharacterId(Integer mainCharacterId) {
+		this.mainCharacterId = mainCharacterId;
+	}
+
+	public Character getMainCharacter() {
+		return mainCharacter;
+	}
+
+	public void setMainCharacter(Character mainCharacter) {
+		this.mainCharacter = mainCharacter;
+	}
+
+	public Integer getMainExp() {
+		return mainExp;
+	}
+
+	public void setMainExp(Integer mainExp) {
+		this.mainExp = mainExp;
+	}
+
+	public Integer getAltExp() {
+		return altExp;
+	}
+
+	public void setAltExp(Integer altExp) {
+		this.altExp = altExp;
 	}
 
 }

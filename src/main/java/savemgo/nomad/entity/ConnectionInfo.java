@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_connections")
@@ -37,6 +38,9 @@ public class ConnectionInfo {
 	
 	@Column(length = 15, name = "private_port", nullable = false)
 	private Integer privatePort;	
+	
+	@Version
+	private Integer version;
 	
 	public ConnectionInfo() {
 

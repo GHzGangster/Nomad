@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_characters_hostsettings")
@@ -32,6 +33,9 @@ public class CharacterHostSettings {
 	@Column(nullable = false)
 	private String settings;
 
+	@Version
+	private Integer version;
+	
 	public CharacterHostSettings() {
 
 	}

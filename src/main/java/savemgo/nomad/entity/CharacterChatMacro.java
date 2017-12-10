@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_characters_chatmacros")
@@ -33,6 +34,9 @@ public class CharacterChatMacro {
 	
 	@Column(length = 64)
 	private String text = "";
+	
+	@Version
+	private Integer version;
 	
 	public CharacterChatMacro() {
 

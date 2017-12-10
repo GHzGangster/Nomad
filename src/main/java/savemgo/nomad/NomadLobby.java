@@ -45,6 +45,7 @@ public abstract class NomadLobby extends ChannelInboundHandlerAdapter {
 
 		case 0x0005:
 			Packets.write(ctx, 0x0005);
+			onPing(ctx);
 			break;
 
 		default:
@@ -77,6 +78,10 @@ public abstract class NomadLobby extends ChannelInboundHandlerAdapter {
 		}
 	}
 
+	public void onPing(ChannelHandlerContext ctx) {
+		
+	}
+	
 	@Override
 	public final void channelActive(ChannelHandlerContext ctx) {
 		logger.debug("Connection opened.");

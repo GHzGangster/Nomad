@@ -16,3 +16,6 @@ buildNumber.properties
 .mvn/timing.properties
 hs_err_pid*
 nomad.properties
+src/main/java/topsecret/
+/dlc.bak
+/dlc.bak.bak

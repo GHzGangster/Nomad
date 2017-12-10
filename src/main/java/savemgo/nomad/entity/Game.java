@@ -2,6 +2,7 @@ package savemgo.nomad.entity;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Column;
@@ -15,6 +16,7 @@ import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 import javax.persistence.Transient;
+import javax.persistence.Version;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,9 +27,6 @@ public class Game {
 
 	@Transient
 	private static final Logger logger = LogManager.getLogger();
-
-	@Transient
-	private int lastUpdate = 0;
 
 	@Column(nullable = false, unique = true)
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -81,6 +80,24 @@ public class Game {
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "game")
 	private List<Player> players;
 
+	@Version
+	private Integer version;
+	
+	@Transient
+	private ReentrantLock playerLock = new ReentrantLock();
+
+	@Transient
+	private ReentrantLock endGameLock = new ReentrantLock();
+
+	@Transient
+	private List<Integer> playersLastRound = new ArrayList<>();
+	
+	@Transient
+	private int lastUpdate = 0;
+	
+	@Transient
+	private int lastNCheck = 0;
+	
 	public Game() {
 
 	}
@@ -215,30 +232,25 @@ public class Game {
 
 	public void initPlayers() {
 		players = new ArrayList<Player>();
-		logger.debug("Game {} | Initialized players.", id);
-	}
-
-	public void clearPlayers() {
-		players.clear();
-		logger.debug("Game {} | Cleared players.", id);
+		logger.info("Game {} ({}) | Initialized players.", name, id);
 	}
 
 	public void addPlayer(Player player) {
 		players.add(player);
-		logger.debug("Game {} | Added player: {}", id, player.getCharacterId());
+		logger.info("Game {} ({}) | Added player: {}", name, id, player.getCharacterId());
 	}
 
 	public void removePlayer(Player player) {
 		players.remove(player);
-		logger.debug("Game {} | Removed player: {}", id, player.getCharacterId());
+		logger.info("Game {} ({}) | Removed player: {}", name, id, player.getCharacterId());
 	}
 
 	public Player getPlayerByCharacterId(int id) {
 		Player player = players.stream().filter((e) -> e.getCharacterId() == id).findAny().orElse(null);
 		if (player != null) {
-			logger.debug("Game {} | Got player: {}", this.id, id);
+			logger.info("Game {} ({}) | Got player: {}", name, this.id, id);
 		} else {
-			logger.debug("Game {} | Couldn't get player: {}", this.id, id);
+			logger.info("Game {} ({}) | Couldn't get player: {}", name, this.id, id);
 		}
 		return player;
 	}
@@ -249,6 +261,38 @@ public class Game {
 
 	public void setLastUpdate(int lastUpdate) {
 		this.lastUpdate = lastUpdate;
+	}
+
+	public ReentrantLock getPlayerLock() {
+		return playerLock;
+	}
+
+	public void setPlayerLock(ReentrantLock addPlayerLock) {
+		this.playerLock = addPlayerLock;
+	}
+
+	public ReentrantLock getEndGameLock() {
+		return endGameLock;
+	}
+
+	public void setEndGameLock(ReentrantLock endGameLock) {
+		this.endGameLock = endGameLock;
+	}
+
+	public List<Integer> getPlayersLastRound() {
+		return playersLastRound;
+	}
+
+	public void setPlayersLastRound(List<Integer> playersLastRound) {
+		this.playersLastRound = playersLastRound;
+	}
+
+	public int getLastNCheck() {
+		return lastNCheck;
+	}
+
+	public void setLastNCheck(int lastNCheck) {
+		this.lastNCheck = lastNCheck;
 	}
 
 }

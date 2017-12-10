@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_characters_blocked")
@@ -33,9 +34,13 @@ public class CharacterBlocked {
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
 	private Character target;
 	
+	@Version
+	private Integer version;
+	
 	public CharacterBlocked() {
 
 	}
+	
 	public Integer getId() {
 		return id;
 	}

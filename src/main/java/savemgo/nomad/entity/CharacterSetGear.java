@@ -9,6 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_characters_sets_gear")
@@ -94,6 +95,9 @@ public class CharacterSetGear {
 	@Column(name = "face_paint", nullable = false)
 	private Integer facePaint;
 
+	@Version
+	private Integer version;
+	
 	public CharacterSetGear() {
 
 	}

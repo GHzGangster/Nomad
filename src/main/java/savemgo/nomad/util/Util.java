@@ -8,6 +8,7 @@ import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.gson.Gson;
@@ -18,6 +19,7 @@ import com.google.gson.JsonObject;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.CharsetUtil;
 import savemgo.nomad.entity.User;
@@ -217,8 +219,12 @@ public class Util {
 	}
 
 	public static String getUserInfo(ChannelHandlerContext ctx) {
-		String ip = ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress().getHostAddress();
-		User user = NUsers.get(ctx.channel());
+		return getUserInfo(ctx.channel());
+	}
+
+	public static String getUserInfo(Channel ch) {
+		String ip = ((InetSocketAddress) ch.remoteAddress()).getAddress().getHostAddress();
+		User user = NUsers.get(ch);
 		String info = ip;
 		if (user != null) {
 			info += " - User " + user.getId();
@@ -227,6 +233,36 @@ public class Util {
 			}
 		}
 		return info;
+	}
+
+	private static final char[] NAME_VALID_CHARS = { ' ', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-',
+			'.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<', '=', '>', '?', '@', 'A', 'B',
+			'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+			'X', 'Y', 'Z', '[', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+			'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~', '¡', '¢', '£', '¥',
+			'¦', 'ª', '«', '°', 'µ', 'º', '»', '¿', 'À', 'Á', 'Â', 'Ã', 'Ä', 'Å', 'Æ', 'Ç', 'È', 'É', 'Ê', 'Ë', 'Ì',
+			'Í', 'Î', 'Ï', 'Ñ', 'Ò', 'Ó', 'Ô', 'Õ', 'Ö', '×', 'Ø', 'Ù', 'Ú', 'Û', 'Ü', 'Ý', 'ß', 'à', 'á', 'â', 'ã',
+			'ä', 'å', 'æ', 'ç', 'è', 'é', 'ê', 'ë', 'ì', 'í', 'î', 'ï', 'ñ', 'ò', 'ó', 'ô', 'õ', 'ö', '÷', 'ø', 'ù',
+			'ú', 'û', 'ü', 'ý', 'ÿ' };
+	
+	public static boolean checkName(String str) {
+		char[] chars = str.toCharArray();
+		if (chars[0] == ' ' || chars[chars.length - 1] == ' ') {
+			return false;
+		}
+		charLoop: for (char c : chars) {
+			for (char v : NAME_VALID_CHARS) {
+				if (c == v) {
+					continue charLoop;
+				}
+			}
+			return false;
+		}
+		return true;
+	}
+	
+	public static <T> T getFirstOrNull(List<T> list) {
+		return list.size() > 0 ? list.get(0) : null;
 	}
 
 }

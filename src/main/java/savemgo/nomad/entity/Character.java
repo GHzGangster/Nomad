@@ -14,6 +14,7 @@ import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 import javax.persistence.Transient;
+import javax.persistence.Version;
 
 @Entity
 @Table(name = "mgo2_characters")
@@ -34,10 +35,12 @@ public class Character {
 	@Column(length = 16, nullable = false)
 	private String name;
 
+	@Column(name = "old_name", length = 16, nullable = true)
+	private String oldName;
+
 	private Integer rank = 0;
 
-	private Integer exp = 0;
-
+	@Column(length = 128)
 	private String comment;
 
 	@Column(name = "host_score")
@@ -48,6 +51,11 @@ public class Character {
 
 	@Column(length = 2048, name = "gameplay_options")
 	private String gameplayOptions;
+
+	@Column(name = "creation_time")
+	private Integer creationTime;
+
+	private Integer active;
 
 	@Column(name = "lobby", nullable = true, insertable = false, updatable = false)
 	private Integer lobbyId = 0;
@@ -66,6 +74,12 @@ public class Character {
 	private List<CharacterChatMacro> chatMacros;
 
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<MessageClanApplication> clanApplication;
+
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
+	private List<ClanMember> clanMember;
+
+	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<CharacterEquippedSkills> skills;
 
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
@@ -82,16 +96,19 @@ public class Character {
 
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<ConnectionInfo> connectionInfo;
-	
+
 	@OneToMany(cascade = CascadeType.REMOVE, fetch = FetchType.LAZY, mappedBy = "character")
 	private List<Player> player;
-	
+
 	// OneToOne isn't working lazily, use OneToMany for now
 	// @JoinColumn(name = "id")
 	// @LazyToOne(LazyToOneOption.PROXY)
 	// @OneToOne(fetch = FetchType.LAZY, mappedBy = "character", optional =
 	// false)
 	// private CharacterAppearance appearance;
+
+	// @Version
+	// private Integer version;
 
 	@Transient
 	private Integer gameJoining = null;
@@ -126,14 +143,6 @@ public class Character {
 
 	public void setRank(Integer rank) {
 		this.rank = rank;
-	}
-
-	public Integer getExp() {
-		return exp;
-	}
-
-	public void setExp(Integer exp) {
-		this.exp = exp;
 	}
 
 	public String getComment() {
@@ -287,5 +296,45 @@ public class Character {
 	public void setPlayer(List<Player> player) {
 		this.player = player;
 	}
-	
+
+	public Integer getCreationTime() {
+		return creationTime;
+	}
+
+	public void setCreationTime(Integer creationTime) {
+		this.creationTime = creationTime;
+	}
+
+	public String getOldName() {
+		return oldName;
+	}
+
+	public void setOldName(String oldName) {
+		this.oldName = oldName;
+	}
+
+	public Integer getActive() {
+		return active;
+	}
+
+	public void setActive(Integer active) {
+		this.active = active;
+	}
+
+	public List<ClanMember> getClanMember() {
+		return clanMember;
+	}
+
+	public void setClanMember(List<ClanMember> clanMember) {
+		this.clanMember = clanMember;
+	}
+
+	public List<MessageClanApplication> getClanApplication() {
+		return clanApplication;
+	}
+
+	public void setClanApplication(List<MessageClanApplication> clanApplication) {
+		this.clanApplication = clanApplication;
+	}
+
 }
