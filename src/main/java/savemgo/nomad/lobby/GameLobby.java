@@ -23,7 +23,6 @@ import savemgo.nomad.instances.NUsers;
 import savemgo.nomad.packet.Packet;
 import savemgo.nomad.plugin.PluginHandler;
 import savemgo.nomad.util.Packets;
-import topsecret.helper.Syringe;
 
 @Sharable
 public class GameLobby extends NomadLobby {
@@ -141,7 +140,7 @@ public class GameLobby extends NomadLobby {
 		/** Games */
 		case 0x4300:
 			Games.getList(ctx, getLobby(), 0x4301, in);
-			//Games.getListFile(ctx, getLobby().getId(), 0x4301);
+			// Games.getListFile(ctx, getLobby().getId(), 0x4301);
 			break;
 
 		case 0x4312:
