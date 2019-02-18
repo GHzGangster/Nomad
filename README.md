@@ -11,4 +11,4 @@ Any help in the form of pull requests, issues, pointers, and such are welcome.
 Please join the forums at [SaveMGO](https://savemgo.com/) if you plan on contributing.
 
 # Authors
-Derrik Touve - [derrik.me](https://derrik.me/)
+[Derrik Touve](https://derrik.me/)
