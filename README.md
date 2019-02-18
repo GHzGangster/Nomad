@@ -9,3 +9,6 @@ The server requires Java 8. I do not intend to lower the required version.
 # Contributing
 Any help in the form of pull requests, issues, pointers, and such are welcome.
 Please join the forums at [SaveMGO](https://savemgo.com/) if you plan on contributing.
+
+# Authors
+Derrik Touve - [derrik.me](https://derrik.me/)
